@@ -81,3 +81,11 @@ Format:
 - **Consequences / revisit when:** FE-001 spec + config drafted, prompts v1 placeholders. Code starts
   next session once prompts are written and scratch repo flow verified. If promises/drivers change, the
   driver may move from bash/Python to opencode-server API — that's also the p001 integration point.
+
+### DEC-008 — Engine is deployed inside the selfide repo as a subfolder (2026-09-07)
+- **Decision:** The p002 engine ships as `50-projects/p002-selfdev-engine/` inside `nkyang10/selfide`
+  (not its own repo). User chose "push into selfide (subfolder)" over a dedicated public/private repo.
+- **Rationale:** keeps the control-center single-repo model; the engine's self-improvement loop can
+  still operate on its own subfolder via branch/PR.
+- **Alternatives rejected:** dedicated `nkyang10/selfdev-engine` repo (public/private) — offered, not chosen.
+- **Consequences / revisit when:** if the engine gains independent consumers, split it out then (git subtree).

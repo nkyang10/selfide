@@ -23,3 +23,4 @@
 | 2026-09-07 | s002 | p002 | `python3 -m py_compile driver.py github_api.py`; `driver --help`; `driver cycle --work ... --dry-run` | 0 | dry-run end-to-end OK; fixed --dry-run arg placement + dry interview file bug |
 | 2026-09-07 | s002 | docs | write 30-runbooks/rb-002-night-cycle.md + index; update FE-001/002 status.md; DEC-007; README status | 0 | ops docs recorded |
 | 2026-09-07 | s002 | folder | git push selfide with engine (second push) | 0 | selfide updated (after final tidy, verify) |
+| 2026-09-07 | s002 | p002 | verify selfide remote tree (16 engine blobs), clean working tree; record DEC-008 (engine ships in selfide subfolder per user); reorg open-followups (FU-005/009/014 resolved) | 0 | docs updated; no code change |
