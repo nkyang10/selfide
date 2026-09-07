@@ -34,3 +34,4 @@
 | 2026-09-07 | s002 | p002 | driver.py: git() retries (network flakiness to github.com:443 seen ~135s connect drops) | 0 | robustness added for night runs |
 | 2026-09-07 | s002 | p002 | write USER-GUIDE.md (user manual) + READINESS-REVIEW.md (step-by-step readiness) | 0 | documented usage + honest readiness verdict |
 | 2026-09-07 | s002 | p002 | fix: reviewer verdict now gates merge; agent stdout→run logs (deadlock fix); cycle2 re-push FF fix (delete stale branch); task-branch cleanup; log routing for all phases | 0 | readiness raised (was: decorative review, PIPE deadlock risk, cycle2 push break) |
+| 2026-09-07 | s002 | p002 | audit: agent exit codes now checked + retried once; phase artifacts verified (plan tasks, per-task commits, QA gate, APPROVE verdict); QA tests/verdict committed into PR; REST urlopen timeout=45s; run_agent/spawn_agent refactor | 0 | no more silent lost triggers / no idle-forever (per user question) |

@@ -100,8 +100,10 @@ python3 scripts/driver.py cycle --work "..." --feature "..."   # handoff + auto-
 
 ## 4. Safety & expectations
 
-- **Nothing runs before the plan is GOOD** (kickoff gate). Mor over: the reviewer's
-  `REQUEST_CHANGES` **blocks the merge** and the PR is left for you (or a re-run).
+- **Nothing runs before the plan is GOOD** (kickoff gate). The reviewer's verdict **must be `APPROVE`**
+  and **QA must pass** for an auto-merge; else the PR stays open for you. Every agent is exit-checked
+  (with one retry); a failing/lost agent aborts or skips **loudly** on the board — never a silent empty cycle.
+- Every agent run has a timeout (900–2400s), so nothing idles forever on a stuck model.
 - Lightweight interview: MVP questions are provided by the engine template; the *real* plan is
   produced by the Assembler during `run` and lives in `ENGINE_PLAN/` in the repo.
 - Cost: every phase calls a model. One overnight cycle ≈ 1 (plan) + N (engineers) + 1 (QA) + 1

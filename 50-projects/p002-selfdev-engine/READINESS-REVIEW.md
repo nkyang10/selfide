@@ -28,13 +28,13 @@
 | Phase | Status | Verdict notes |
 |---|---|---|
 | clone + branch `engine/<rid>` | ✅ | with FF re-push fix for cycle 2+ (stale remote branch deleted first) |
-| Assembler plan → committed | ✅ | agent call + git commit + board note |
-| **Engineers in parallel** (≥2 tasks) | ✅ | per-task `git worktree` + branch, batched `max_parallel`, merge, branch housekeeping |
+| Assembler plan → committed | ✅ | **exit-code checked + 1 retry**; no parseable `tasks.md` → cycle aborts with a board note (no silent empty run) |
+| **Engineers in parallel** (≥2 tasks) | ✅ | per-task `git worktree` + branch, batched `max_parallel`; **each agent's exit code and ≥1 commit verified** before merge — failed/empty tasks are skipped with a board note, not merged |
 | Researcher (idle, concurrent) | ✅ | background agent during implementation; findings posted to board |
-| QA tests-to-green | 🟡 | QA **agent itself iterates** to green (prompt enforces it); the driver-level `qa_iterations` counter is not implemented as a driver loop — failure mode = QA reports and documents inability, no auto re-kick |
-| Review + verdict file | 🟡 | reviewer writes `review.md` **if** it writes where the driver looks (3 candidate paths); verdict parsed |
-| **Reviewer gates merge** | ✅ **fixed now** | `REQUEST_CHANGES` blocks auto-merge; `require_human` never merges. (Was a decorative phase before the fix.) |
-| Ship: PR + merge | ✅ | PR create/merge permissions live-verified |
+| QA tests-to-green | 🟡 | driver **runs QA, checks exit, retries once**; if QA fails → **blocks auto-merge**. QA's test files are committed into the PR (previously lost); iteration is the agent's own loop (`qa_iterations` not a driver loop) |
+| Review + verdict file | ✅ | reviewer must write `ENGINE_STATE/review.md`; only an explicit `APPROVE` authorizes auto-merge |
+| **Reviewer gates merge** | ✅ | merge happens only if gate auto **AND QA ok AND verdict=APPROVE**; `require_human` never merges; missing/unclear verdict leaves PR open |
+| Ship: PR + merge | ✅ | PR create/merge permissions live-verified; PR body carries plan/QA/verdict summary |
 | Morning report | 🟡 | prints + posts; uses run trail/meta (plan section shows interview plan, not the in-repo assembler plan) |
 
 ## Robustness
@@ -43,6 +43,8 @@
 |---|---|---|
 | github.com flakiness (443 drops ~130s) | ✅ | git ops retry (3x, backoff); REST unaffected; one live push observed succeeding on retry |
 | Agent stdout deadlock (PIPE) | ✅ **fixed now** | agents stream to `ENGINE_STATE/runs/<id>/agent-*.log` instead of an undrained pipe |
+| **Lost/vanish role trigger** | ✅ **fixed now** | every agent run is exit-code-checked and retried once; phase artifacts are verified (plan tasks, per-task commits, QA result, APPROVE verdict); failures abort/skip **loudly** with board notes instead of silently continuing |
+| **Idle forever / hang** | ✅ **fixed now** | every agent waits with a timeout (900–2400s) and is killed on expiry; REST calls now carry a 45s timeout (previously unbounded → could hang forever); git ops capped 200s/attempt |
 | FDs/cleanup | ✅ | stdout handles closed after wait; rogue worktrees removed; probe self-cleans |
 | Secrets | ✅ | token only via env; nothing committed (sweep done repeatedly) |
 
@@ -54,7 +56,7 @@
 2. **Interview intelligence** — questions/plan-stub are template-based; Assembler-driven interview is
    designed but not wired (`prompts/assembler.md` covers planning, not the Q&A loop).
 3. **QA iteration cap** — driver-level `qa_iterations`/`review_rounds` counters present but the driver
-   does not loop; relies on the agent's own loops.
+   does not loop; relies on the agent's own loops (a failing QA correctly blocks the merge).
 4. Defaults tuned for a **throwaway repo** — recommend keeping auto-merge only on playground repos;
    on any real project switch `gates.review: require_human`.
 
