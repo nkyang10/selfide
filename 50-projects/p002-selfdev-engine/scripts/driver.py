@@ -681,8 +681,22 @@ def targets_all_met(co):
     return not any(l.strip().startswith("- [ ]") or l.strip().startswith("* [ ]") for l in tgt.read_text().splitlines())
 
 
+def _ship_only_pending(cfg, rid, cyc):
+    """True when a failed cycle left all pre-ship phases done — a resume will re-run only the ship step."""
+    sf = run_dir(cfg, rid) / f"state-{cyc}.json"
+    if not sf.exists():
+        return False
+    try:
+        state = json.loads(sf.read_text())
+    except Exception:
+        return False
+    pre = ["assembler", "engineers", "qa", "reviewer", "designer"]
+    return all(state.get(p, {}).get("status") == "done" for p in pre) and state.get("ship", {}).get("status") != "done"
+
+
 def cmd_marathon(a, cfg, dry, token):
-    """Continuous run: repeat cycles until all TARGETS are met or max cycles reached."""
+    """Continuous run: repeat cycles until all TARGETS are met or max cycles reached.
+    A failed cycle whose ship-step was the only blocker is retried via cheap phase-resume."""
     rid = a.run
     meta = read_meta(cfg, rid)
     repo = meta["repo"]
@@ -702,13 +716,17 @@ def cmd_marathon(a, cfg, dry, token):
         else:
             consecutive_fail += 1
             log_run(cfg, rid, f"marathon-cycle-{cyc}", f"FAILED (run rc={rc})")
+            if _ship_only_pending(cfg, rid, cyc) and consecutive_fail <= 4:
+                print(f"marathon: cycle {cyc} blocked at ship step only — resuming (cheap) …", flush=True)
+                time.sleep(30)
+                continue          # retry the SAME cycle: resume skips straight to ship
             if consecutive_fail >= 3:
                 print(f"marathon abort: {consecutive_fail} consecutive failures", flush=True)
                 break
+            print(f"marathon: cycle {cyc} failed ({rc}) — small backoff then retry", flush=True)
         if targets_all_met(co):
             print(f"marathon done: all targets met after cycle {last}", flush=True)
             break
-        print(f"marathon: cycle {cyc} done (last good {last}, running) — sleeping {a.min_gap}s", flush=True)
         time.sleep(a.min_gap)
     print(f"marathon finished for {rid}: {last} cycles", flush=True)
 

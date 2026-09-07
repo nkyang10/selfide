@@ -23,10 +23,9 @@ def _headers():
     return h
 
 
-def request(method, path, data=None, retries=2):
+def request(method, path, data=None, retries=4):
     url = path if path.startswith("http") else API + path
     body = json.dumps(data).encode() if data is not None else None
-    last = None
     for attempt in range(retries + 1):
         try:
             req = urllib.request.Request(url, data=body, headers=_headers(), method=method)
@@ -35,13 +34,13 @@ def request(method, path, data=None, retries=2):
                 return r.status, (json.loads(raw) if raw else None)
         except urllib.error.HTTPError as e:
             snippet = e.read().decode(errors="replace")[:400]
-            if e.code >= 500 and attempt < retries:      # transient GitHub outages: wait and retry
-                time.sleep(RETRY_SLEEP * (attempt + 1))
+            if e.code >= 500 and attempt < retries:      # GitHub flaps: back off exponential to ~2 min total
+                time.sleep(RETRY_SLEEP * (2 ** attempt))
                 continue
             if e.code >= 500 and method in ("POST", "PATCH", "PUT"):
                 try:
                     return _curl_retry(method, url, data)
-                except RuntimeError as ce:
+                except RuntimeError:
                     pass
             raise RuntimeError(f"github {method} {path} -> {e.code}: {snippet}")
 
