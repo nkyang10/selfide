@@ -63,21 +63,27 @@ python3 scripts/driver.py run --run <run-id> --cycle 1
 What happens (all visible on the repo):
 | Phase | Role agent | Visible artifact |
 |---|---|---|
-| plan | Assembler | `ENGINE_PLAN/<run-id>/{PRD,design,tasks}.md` on branch `engine/<run-id>` |
-| implement | Engineers (parallel, 1 worktree-task each) | commits per task on `engine/<run-id>` |
+| plan | Assembler (+ prior `NEXT-CYCLE.md`) | `ENGINE_PLAN/<run-id>/{PRD,design,tasks}.md` on branch `engine/<run-id>` |
+| implement | Engineers (pipelined ThreadPool, ≤ `max_parallel` concurrent) | commits per task on `engine/<run-id>`; per-worker log `runs/<id>/workers-<cycle>.jsonl` |
 | research | Researcher (idle, in parallel) | findings posted on the issue |
 | test | QA | tests added/run to green |
 | review | Reviewer | `review.md` verdict — `REQUEST_CHANGES` blocks the auto-merge |
+| **design (every cycle)** | Designer (product-design party) | **`ENGINE_PLAN/<run-id>/NEXT-CYCLE.md`** — new tasks/refinements for the NEXT cycle, posted on the board |
 | ship | driver | PR opened → merged into `main` (see gates below) |
+
+The loop is self-feeding: every cycle the **research party + product-design party** propose the next
+cycle's tasks/refinements; the next cycle's Assembler treats `NEXT-CYCLE.md` as its input and plans on
+top of it — until you say the requirement is reached.
 
 ### Step 4 · Morning
 ```
 python3 scripts/driver.py report --run <run-id> --cycle 1
 ```
-The report prints and is posted on the epic issue: what shipped, what decided, what's next.
+The report prints and is posted on the epic issue: what shipped, what decided, the **research+design
+proposals for the next cycle**, and the next question for you.
 - Requirement met? Close the epic. **Done.**
-- Not yet? Answer/refine on the board, then `run --cycle 2` on the SAME repo — the loop keeps
-  converging until you say it's reached.
+- Not yet? Pick/confirm the proposals you want (reply on the board → `clarify --answer "…"`), then
+  `run --cycle 2` on the SAME repo — next cycle consumes `NEXT-CYCLE.md` and keeps converging.
 
 ### One-shot convenience
 ```
@@ -97,6 +103,11 @@ python3 scripts/driver.py cycle --work "..." --feature "..."   # handoff + auto-
 | `gates.plan` | `auto` | plan accepted without a human pause |
 | `gates.review` | `auto_merge` | merge PR when reviewer approves; `require_human` = never auto-merge |
 | `require_mgmt.max_question_rounds` | `2` | interview rounds before auto-plan |
+
+## Logs & observability
+Every cycle writes `ENGINE_STATE/runs/<run-id>/workers-<cycle>.jsonl` (per-worker start/end/exit/commits) and
+`phases-<cycle>.jsonl` (assembler/engineers/QA/reviewer/designer/ship timings + results); the morning report
+includes the phase summary. Worker failures are also posted to the board.
 
 ## 4. Safety & expectations
 

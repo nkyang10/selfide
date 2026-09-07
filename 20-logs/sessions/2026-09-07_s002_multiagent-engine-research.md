@@ -47,3 +47,12 @@
   researcher ✓, reviewer APPROVE ✓, PR #13 merged +1138/-1, morning report posted to epic #12.
 - Field fixes: absolute --dir for opencode; flat task branches; REST 5xx retry (DEC-009).
 - Ship phase completed manually once (transient GH 500); FU-016 to re-verify driver self-ship.
+
+## Cycle 2 + pipeline/logging enhancements (late s002)
+- Cycle 2 shipped (PR #14 merged): delete-item + qty; Designer emitted NEXT-CYCLE.md (new feedback
+  loop live: research+design → next-cycle tasks every cycle).
+- Post-cycle enhancements per user: worker-phase logging (workers-*.jsonl/phases-*.jsonl → report),
+  pipelined parallel engineers (ThreadPoolExecutor), curl fallback for the create_pr 500 client quirk,
+  per_page comment fix. Verified compile + dry-run.
+- fields: two manual ship completions so far (transient/curl 500s); next cycle should self-ship via the
+  curl fallback.

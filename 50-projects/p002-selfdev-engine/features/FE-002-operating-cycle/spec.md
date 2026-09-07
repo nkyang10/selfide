@@ -26,6 +26,10 @@ project closer to the requirement. This recurs until the user requirement is rea
      the morning report is posted to the epic issue.
    - **researcher**: an idle subagent polls every `idle_poll_minutes`; scans the web for the epic's
      subject, posts findings as board comments/issues (`engine/finding`), referenced by assembler.
+   - **designer (every cycle)**: after QA+review, the research + product-design parties emit
+     `ENGINE_PLAN/<run-id>/NEXT-CYCLE.md` — concrete new tasks/refinements/improvements for the next
+     cycle (tagged `[research]` where sourced from the researcher), committed into the PR and posted.
+     Cycle N+1's Assembler consumes it as the approved input.
 4. **Morning checkpoint** (`report`): at `night_cycle.duration_hours`, post summary (done / paused /
    decisions / next questions) and save `ENGINE_STATE/reports/<cycle>.md`.
 5. **Recurrence** (`cycle N+1`): if `loop_until_accepted` and user's morning review != "requirement

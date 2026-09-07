@@ -14,7 +14,9 @@ RETRY_SLEEP = 4
 
 
 def _headers():
-    h = {"X-GitHub-Api-Version": "2022-11-28", "Accept": "application/vnd.github+json"}
+    h = {"X-GitHub-Api-Version": "2022-11-28",
+         "Accept": "application/vnd.github+json",
+         "Content-Type": "application/json"}
     tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if tok:
         h["Authorization"] = "Bearer " + tok
@@ -24,6 +26,7 @@ def _headers():
 def request(method, path, data=None, retries=2):
     url = path if path.startswith("http") else API + path
     body = json.dumps(data).encode() if data is not None else None
+    last = None
     for attempt in range(retries + 1):
         try:
             req = urllib.request.Request(url, data=body, headers=_headers(), method=method)
@@ -35,7 +38,33 @@ def request(method, path, data=None, retries=2):
             if e.code >= 500 and attempt < retries:      # transient GitHub outages: wait and retry
                 time.sleep(RETRY_SLEEP * (attempt + 1))
                 continue
+            if e.code >= 500 and method in ("POST", "PATCH", "PUT"):
+                try:
+                    return _curl_retry(method, url, data)
+                except RuntimeError as ce:
+                    pass
             raise RuntimeError(f"github {method} {path} -> {e.code}: {snippet}")
+
+
+def _curl_retry(method, url, data):
+    """curl fallback for GitHub endpoints that intermittently 500 depending on the client's request shape."""
+    import subprocess
+    tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    cmd = ["curl", "-s", "-X", method, "-H", f"Authorization: Bearer {tok}",
+           "-H", "Accept: application/vnd.github+json", "-H", "Content-Type: application/json",
+           "-H", "X-GitHub-Api-Version: 2022-11-28"]
+    if data is not None:
+        cmd += ["-d", json.dumps(data)]
+    cmd += ["-w", "\n__HTTP__%{http_code}", url]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    code = 0
+    body = r.stdout
+    if "__HTTP__" in r.stdout:
+        body, _, code_s = r.stdout.rpartition("__HTTP__")
+        code = int(code_s.strip()) if code_s.strip().isdigit() else 0
+    if 200 <= code < 300:
+        return code, (json.loads(body) if body.strip() else None)
+    raise RuntimeError(f"github {method} {url} -> {code}: {body[:400]}")
 
 
 def default_branch(repo):
@@ -51,8 +80,8 @@ def add_issue_comment(repo, issue_no, body):
     return request("POST", f"/repos/{repo}/issues/{issue_no}/comments", {"body": body})[1]
 
 
-def get_issue_comments(repo, issue_no):
-    return request("GET", f"/repos/{repo}/issues/{issue_no}/comments")[1]
+def get_issue_comments(repo, issue_no, _last=None):
+    return request("GET", f"/repos/{repo}/issues/{issue_no}/comments?per_page=100")[1]
 
 
 def list_issues(repo, state="open", labels=None, limit=30):

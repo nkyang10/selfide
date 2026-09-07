@@ -29,7 +29,7 @@
 |---|---|---|
 | clone + branch `engine/<rid>` | ✅ | with FF re-push fix for cycle 2+ (stale remote branch deleted first) |
 | Assembler plan → committed | ✅ | **exit-code checked + 1 retry**; no parseable `tasks.md` → cycle aborts with a board note (no silent empty run) |
-| **Engineers in parallel** (≥2 tasks) | ✅ | per-task `git worktree` + branch, batched `max_parallel`; **each agent's exit code and ≥1 commit verified** before merge — failed/empty tasks are skipped with a board note, not merged |
+| **Engineers in parallel** (≥2 tasks) | ✅ | per-task `git worktree` + branch on a **pipelined ThreadPool (max_parallel)** — no batch stalls; **each agent's exit code and ≥1 commit verified**; worker failures skipped with board notes; per-worker + per-phase JSONL logs |
 | Researcher (idle, concurrent) | ✅ | background agent during implementation; findings posted to board |
 | QA tests-to-green | 🟡 | driver **runs QA, checks exit, retries once**; if QA fails → **blocks auto-merge**. QA's test files are committed into the PR (previously lost); iteration is the agent's own loop (`qa_iterations` not a driver loop) |
 | Review + verdict file | ✅ | reviewer must write `ENGINE_STATE/review.md`; only an explicit `APPROVE` authorizes auto-merge |

@@ -4,7 +4,23 @@
   "workdir": "/tmp/opencode/engine-work",
   "state_dir": "ENGINE_STATE",
   "model": "",
-  "roles": ["assembler", "engineer", "qa", "reviewer", "researcher", "retro"],
-  "gates": { "plan": "auto", "review": "auto_merge", "qa_iterations": 3, "review_rounds": 2 },
-  "require_mgmt": { "interview": true, "max_question_rounds": 2 }
+  "roles": [
+    "assembler",
+    "engineer",
+    "qa",
+    "reviewer",
+    "researcher",
+    "designer",
+    "retro"
+  ],
+  "gates": {
+    "plan": "auto",
+    "review": "auto_merge",
+    "qa_iterations": 3,
+    "review_rounds": 2
+  },
+  "require_mgmt": {
+    "interview": true,
+    "max_question_rounds": 2
+  }
 }

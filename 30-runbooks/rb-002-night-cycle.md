@@ -40,9 +40,11 @@ python3 scripts/driver.py run --run <run-id> --cycle 1
 ```
 
 Driver does: clone worktree → branch `engine/<run-id>` → materialize the role agents from
-`prompts/*.md` → **think** (Assembler: PRD/design/tasks in `ENGINE_PLAN/<run-id>/`) →
-**complete** (Engineer per task) → **test** (QA to green) → **review** (Reviewer verdict) →
-**complete** (PR opened, merged if `auto_merge`) — posting progress notes on the epic issue.
+`prompts/*.md` → **think** (Assembler: PRD/design/tasks in `ENGINE_PLAN/<run-id>/`; cycle 2+ reads the
+previous `NEXT-CYCLE.md` as input) → **complete** (Engineer per task, in parallel) → **test** (QA to
+green) → **review** (Reviewer verdict) → **design** (Designer proposes `NEXT-CYCLE.md` = next cycle's
+tasks/refinements, posted on the board) → **complete** (PR opened, merged if `auto_merge` + QA ok +
+verdict `APPROVE`) — posting progress notes on the epic issue.
 
 ## Morning (report + next cycle)
 

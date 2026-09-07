@@ -112,7 +112,8 @@ the machine's **workspace**, its **shared discussion board**, and its **audit tr
 | `engineer.md` | Implementer | code committed on branch | QA green |
 | `qa.md` | Tester | tests written, suite green (≤N iters) | suite result |
 | `reviewer.md` | Code reviewer | verdict + report | approve |
-| `researcher.md` | Idle web research (aligns project → requirement) | research briefs as issues/board comments | consumed by assembly |
+| `researcher.md` | Idle web research (aligns project → requirement) | research briefs as issues/board comments | consumed by assembler/designer |
+| `designer.md` | Product-design party: proposes next-cycle tasks/refinements | `ENGINE_PLAN/<run-id>/NEXT-CYCLE.md` (committed, posted) | consumed by assembler next cycle |
 | `retro.md` | Meta (self-improvement) | lessons + brief edits | human merge of its PR |
 
 ## MVP scope (one night-cycle, scratch repo)
@@ -149,7 +150,7 @@ the machine's **workspace**, its **shared discussion board**, and its **audit tr
 | `features/FE-002-operating-cycle/` | spec + status (overnight cycle, interview, researcher, morning report) |
 | `notes/` | feasibility/API notes |
 | `sessions/` | per-run working notes |
-| `ENGINE_STATE/` | generated run records + lessons (git-ignored) |
+| `ENGINE_STATE/` | generated run records + lessons (git-ignored); per-cycle `phases-<n>.jsonl` + `workers-<n>.jsonl` |
 
 ## References
 - Research + prior art: `40-knowledge/multi-agent-sdlc-engine-research.md`
