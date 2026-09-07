@@ -90,3 +90,15 @@ Format:
   still operate on its own subfolder via branch/PR.
 - **Alternatives rejected:** dedicated `nkyang10/selfdev-engine` repo (public/private) — offered, not chosen.
 - **Consequences / revisit when:** if the engine gains independent consumers, split it out then (git subtree).
+
+### DEC-009 — Live-run findings: opencode agent path, git ref namespace, GitHub 5xx (2026-09-07)
+- **Decision:** Keep three hard-won rules in the driver: (1) always pass **absolute** `--dir` to opencode
+  subprocesses (relative `.` fails agent loading when exec'd without a shell → "Unexpected server error");
+  (2) task branches are **flat** `engine/<rid>-tN` (a `engine/<rid>/tN` sub-branch conflicts with the
+  `engine/<rid>` ref in git's namespace); (3) the GitHub REST client **retries on 5xx** (observed a
+  transient `500` on create_pr that succeeded minutes later).
+- **Rationale:** all three were discovered during the first live run — each caused a real abort, once
+  against DNS-flaky and slow GitHub connectivity.
+- **Alternatives rejected:** treating those as environment noise (they're reproducible: repro showed
+  relative-dir fails 6/6 when python-exec'd); dot-nested task branch names.
+- **Consequences:** next cycle should self-complete the ship phase without manual help.

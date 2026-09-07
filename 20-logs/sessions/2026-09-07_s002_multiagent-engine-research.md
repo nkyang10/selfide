@@ -41,3 +41,9 @@
 - Live-verified the opencode role-agent path (real model call, file write): found agents need
   block-style YAML `permission` (inline {} rejected by opencode schema); fixed in AGENT_FRONTMATTER.
 - Engine is now ready for a live multi-role (parallel) dev cycle on the playground.
+
+## FIRST LIVE CYCLE SHIPPED (late s002)
+- run 20260907-1207 on cloud-pos-system: assembler plan ✓, 4 engineers in parallel ✓, QA 15 tests ✓,
+  researcher ✓, reviewer APPROVE ✓, PR #13 merged +1138/-1, morning report posted to epic #12.
+- Field fixes: absolute --dir for opencode; flat task branches; REST 5xx retry (DEC-009).
+- Ship phase completed manually once (transient GH 500); FU-016 to re-verify driver self-ship.

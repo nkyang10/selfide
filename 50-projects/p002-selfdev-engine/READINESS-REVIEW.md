@@ -50,9 +50,9 @@
 
 ## What is NOT ready / needs user decision
 
-1. **Live end-to-end run** — the full `cycle` has never executed with real agents against the
-   playground (only dry-run + isolated live pieces: agent exec, and permissions). First real run is
-   still outstanding (FU-012).
+1. **~~Live end-to-end run~~** 🟡 PARTIALLY — first live cycle shipped on the playground (plan → 4 parallel
+   engineers → QA → review → PR merged, +1138/−1); the ship phase itself was completed manually after a
+   transient GitHub 500 (fix: REST 5xx retry) — re-run needed to prove the driver lands PR+merge unaided.
 2. **Interview intelligence** — questions/plan-stub are template-based; Assembler-driven interview is
    designed but not wired (`prompts/assembler.md` covers planning, not the Q&A loop).
 3. **QA iteration cap** — driver-level `qa_iterations`/`review_rounds` counters present but the driver

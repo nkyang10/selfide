@@ -4,10 +4,13 @@ Auth: read at call-time from $GITHUB_TOKEN (or $GH_TOKEN). Never hardcode keys.
 """
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
 API = "https://api.github.com"
+
+RETRY_SLEEP = 4
 
 
 def _headers():
@@ -18,17 +21,21 @@ def _headers():
     return h
 
 
-def request(method, path, data=None):
+def request(method, path, data=None, retries=2):
     url = path if path.startswith("http") else API + path
     body = json.dumps(data).encode() if data is not None else None
-    req = urllib.request.Request(url, data=body, headers=_headers(), method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=45) as r:
-            raw = r.read()
-            return r.status, (json.loads(raw) if raw else None)
-    except urllib.error.HTTPError as e:
-        snippet = e.read().decode(errors="replace")[:400]
-        raise RuntimeError(f"github {method} {path} -> {e.code}: {snippet}")
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(url, data=body, headers=_headers(), method=method)
+            with urllib.request.urlopen(req, timeout=45) as r:
+                raw = r.read()
+                return r.status, (json.loads(raw) if raw else None)
+        except urllib.error.HTTPError as e:
+            snippet = e.read().decode(errors="replace")[:400]
+            if e.code >= 500 and attempt < retries:      # transient GitHub outages: wait and retry
+                time.sleep(RETRY_SLEEP * (attempt + 1))
+                continue
+            raise RuntimeError(f"github {method} {path} -> {e.code}: {snippet}")
 
 
 def default_branch(repo):

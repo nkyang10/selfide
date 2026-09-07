@@ -15,6 +15,7 @@ import argparse
 import base64
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -107,8 +108,10 @@ def git(args, cwd=None, dry=False, token=None, retries=3, timeout=200):
             time.sleep(3 * (attempt + 1))
 
 
-def agent_cmd(cfg, agent, message):
-    cmd = [cfg["opencode_bin"], "run", message, "--agent", agent, "--dir", ".", "--auto", "--format", "json"]
+def agent_cmd(cfg, agent, message, cwd):
+    """Build the opencode argv. IMPORTANT: `--dir` MUST be absolute — a relative one makes opencode
+    fail to load the role agent when the child is exec'd without a shell (Unexpected server error)."""
+    cmd = [cfg["opencode_bin"], "run", message, "--agent", agent, "--dir", str(Path(cwd).resolve()), "--auto", "--format", "json"]
     if cfg.get("model"):
         cmd += ["-m", cfg["model"]]
     return cmd
@@ -126,7 +129,7 @@ def run_agent(cfg, agent, message, cwd, dry=False, timeout=900, logfile=None, at
             if logfile is not None:
                 Path(logfile).parent.mkdir(parents=True, exist_ok=True)
                 out = open(logfile, "ab")
-            p = subprocess.Popen(agent_cmd(cfg, agent, message),
+            p = subprocess.Popen(agent_cmd(cfg, agent, message, cwd),
                                  stdout=out or subprocess.DEVNULL, stderr=subprocess.STDOUT, cwd=str(cwd))
             want = p.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -151,7 +154,7 @@ def spawn_agent(cfg, agent, message, cwd, logfile=None):
     if logfile is not None:
         Path(logfile).parent.mkdir(parents=True, exist_ok=True)
         out = open(logfile, "ab")
-    p = subprocess.Popen(agent_cmd(cfg, agent, message),
+    p = subprocess.Popen(agent_cmd(cfg, agent, message, cwd),
                          stdout=out or subprocess.DEVNULL, stderr=subprocess.STDOUT, cwd=str(cwd))
     p._engine_log = out   # caller closes after wait
     return p
@@ -379,10 +382,12 @@ def cmd_run(a, cfg, dry, token):
     research_proc = None
     res_dir = Path(cfg["workdir"]) / f"res-{rid}"
     for i, task in enumerate(task_lines, 1):
-        tb = f"engine/{rid}/t{i}"
+        tb = f"engine/{rid}-t{i}"                       # flat name: `engine/<rid>/t<n>` clashes with the git ref namespace of `engine/<rid>`
         wt = Path(cfg["workdir"]) / f"wt-{rid}-t{i}"
+        if wt.exists():
+            shutil.rmtree(wt, ignore_errors=True)
         git(["worktree", "add", "-b", tb, str(wt), branch], cwd=str(co))
-    wts = [(i, t, Path(cfg["workdir"]) / f"wt-{rid}-t{i}", f"engine/{rid}/t{i}") for i, t in enumerate(task_lines, 1)]
+    wts = [(i, t, Path(cfg["workdir"]) / f"wt-{rid}-t{i}", f"engine/{rid}-t{i}") for i, t in enumerate(task_lines, 1)]
     if cfg.get("researcher", {}).get("on", True):
         res_dir.mkdir(parents=True, exist_ok=True)
         (res_dir / "CONTEXT.md").write_text(
