@@ -27,3 +27,10 @@
   idle internet researchers), morning checkpoint, recur until requirement reached.
 - Folded into p002: new "Operating model — the overnight cycle" section, FE-002 spec/status,
   researcher role brief, engine.yaml daily-cycle keys, DEC-006. s002 fully closed (research + design).
+
+## Engine build + GitHub live (late s002)
+- User: cloud-pos-system = playground for test cases only; engine must be generic for any project.
+- Built p002 MVP: driver + github_api + 6 role prompts + config + rb-002 runbook. Dry-run validated.
+- GitHub: created/used nkyang10/selfide (mirror of this control center, pushed) and
+  nkyang10/cloud-pos-system (playground). DEC-007. FU-012..014 recorded.
+- s002 fully closed: research → design → MVP code (dry-validated).

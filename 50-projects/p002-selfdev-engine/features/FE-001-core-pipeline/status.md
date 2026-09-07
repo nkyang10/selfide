@@ -1,11 +1,14 @@
 # FE-001 — Core Pipeline · Status
 
 - **Last updated:** 2026-09-07 (s002)
-- **Status:** DESIGNED (spec written; not built)
+- **Status:** IMPLEMENTED (dry-run validated; not live-tested against GitHub)
 
 ## Checklist
 - [x] Spec written (`spec.md`)
-- [ ] Placeholder prompts upgraded from v1 drafts to first real briefs
-- [ ] Task integration test: `python scripts/driver.py run --repo … --ticket "todo CLI"` completes
-- [ ] Scratch repo MV path verified (`gh repo create`)
-- [ ] End-to-end acceptance (see `spec.md` §Acceptance) passes
+- [x] `scripts/driver.py` + `github_api.py` (stdlib; handoff/clarify/run/report/cycle, `--dry-run`)
+- [x] Role prompts written (`prompts/*.md`) and materialized into worktrees as opencode agents
+- [x] Config: `config/engine.json(.example)`
+- [x] Dry-run of `cycle` passes end-to-end (no network)
+- [x] `30-runbooks/rb-002-night-cycle.md` written + indexed
+- [ ] Live run against playground repo (verify agent exec, git push, PR/merge on GitHub)
+- [ ] Task integration: `python3 scripts/driver.py run --run … --cycle 1` completes >0 real PR

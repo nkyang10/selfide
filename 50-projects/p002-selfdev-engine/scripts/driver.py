@@ -1,0 +1,371 @@
+#!/usr/bin/env python3
+"""p002 self* development engine — driver CLI (stdlib only).
+
+Subcommands (see features/FE-002-operating-cycle/spec.md):
+  handoff   file the epic + start the clarifying interview
+  clarify   answer a round; engine folds answers in, asks next questions / plans
+  run       execute the FE-001 pipeline on a clone (think→complete→test→review→ship)
+  report    write + post the morning report
+  cycle     handoff + clarify + run + report in one shot
+
+Auth: GitHub token read at run time from $GITHUB_TOKEN (never stored to disk).
+Dry-run: `--dry-run` prints the shell it would execute and performs no network/git.
+"""
+import argparse
+import base64
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+PROJECT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import github_api as gh  # noqa: E402
+
+
+def utc(tag=""):
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M") + tag
+
+
+def deep_merge(base, over):
+    out = dict(base)
+    for k, v in (over or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
+def load_config():
+    defaults = {
+        "target_repo": "nkyang10/cloud-pos-system",
+        "opencode_bin": os.path.expanduser("~/.opencode/bin/opencode"),
+        "workdir": "/tmp/opencode/engine-work",
+        "state_dir": "ENGINE_STATE",
+        "model": "",
+        "roles": ["assembler", "engineer", "qa", "reviewer", "researcher", "retro"],
+        "gates": {"plan": "auto", "review": "auto_merge", "qa_iterations": 3, "review_rounds": 2},
+        "require_mgmt": {"interview": True, "max_question_rounds": 2},
+    }
+    cfg = PROJECT / "config" / "engine.json"
+    if cfg.exists():
+        return deep_merge(defaults, json.loads(cfg.read_text()))
+    return defaults
+
+
+def run_id():
+    return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+
+
+def run_dir(cfg, rid):
+    return PROJECT / cfg["state_dir"] / "runs" / rid
+
+
+def read_meta(cfg, rid):
+    p = run_dir(cfg, rid) / "meta.json"
+    if not p.exists():
+        sys.exit(f"run {rid} not found at {p}")
+    return json.loads(p.read_text())
+
+
+def write_meta(cfg, rid, meta):
+    p = run_dir(cfg, rid)
+    p.mkdir(parents=True, exist_ok=True)
+    (p / "meta.json").write_text(json.dumps(meta, indent=2))
+
+
+def checkout_path(cfg, repo):
+    name = repo.split("/")[-1]
+    return Path(cfg["workdir"]) / name
+
+
+def git(args, cwd=None, dry=False, token=None):
+    env = os.environ.copy()
+    if token:
+        b64 = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+        env["GIT_CONFIG_COUNT"] = "2"
+        env["GIT_CONFIG_KEY_0"] = "http.extraHeader"
+        env["GIT_CONFIG_VALUE_0"] = "Authorization: Basic " + b64
+    cmd = ["git", *args]
+    if dry:
+        print("DRY  $ git " + " ".join(args) + f"  (cwd={cwd})")
+        return
+    subprocess.run(cmd, cwd=cwd, check=True, env=env)
+
+
+def opencode(cfg, agent, message, cwd, dry=False, timeout=900):
+    binp = cfg["opencode_bin"]
+    cmd = [binp, "run", message, "--agent", agent, "--dir", str(cwd), "--auto", "--format", "json"]
+    if cfg.get("model"):
+        cmd += ["-m", cfg["model"]]
+    if dry:
+        print(f"DRY  $ {binp} run \"<task>\" --agent {agent} --dir {cwd} --auto (timeout {timeout}s)")
+        return
+    print(f"· running agent [{agent}] …", flush=True)
+    subprocess.run(cmd, cwd=str(cwd), check=True, timeout=timeout)
+
+
+def board(cfg, meta, text, dry=False, token=None):
+    """Post a note to the epic issue (the shared board)."""
+    if dry:
+        print(f"DRY  board comment on {meta['repo']}#{meta['issue']}: {text[:80]}…")
+        return
+    gh.add_issue_comment(meta["repo"], meta["issue"], text)
+
+
+AGENT_FRONTMATTER = {
+    "assembler": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, bash: 'git *: allow'}",
+    "engineer": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, edit: allow, bash: allow}",
+    "qa": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, edit: allow, bash: allow}",
+    "reviewer": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, bash: 'git *: allow'}",
+    "researcher": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, bash: allow}",
+    "retro": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, edit: allow}",
+}
+
+
+def materialize_agents(cfg, cwd, dry=False):
+    """Generate .opencode/agent/<role>.md in the worktree from prompts/<role>.md (canonical briefs)."""
+    prompts = PROJECT / "prompts"
+    dst = cwd / ".opencode" / "agent"
+    if dry:
+        print(f"DRY  generate {dst}/ from {prompts}/*.md")
+        return
+    dst.mkdir(parents=True, exist_ok=True)
+    for role in cfg["roles"]:
+        brief = prompts / f"{role}.md"
+        if not brief.exists():
+            continue
+        fm = AGENT_FRONTMATTER.get(role, "mode: all")
+        (dst / f"{role}.md").write_text(f"---\nname: {role}\ndescription: p002 role agent: {role}\n{fm}\n---\n\n" + brief.read_text())
+
+
+def heuristic_questions(feature, work):
+    return [
+        f"Target: '{feature}'. What is the single MUST-HAVE outcome for the first usable version (happy path only)?",
+        f"Stack/language for the project? (if unset, we default to Python 3 + no external deps unless you say otherwise.)",
+        f"Is there an existing design, schema, or API shape to follow, or should the Assembler invent a reasonable one?",
+        f"Where should the result be deployed/served, if at all, in this cycle? (default: local CLI/library, no infra.)",
+    ]
+
+
+def log_run(cfg, rid, phase, note):
+    p = run_dir(cfg, rid) / "trail.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("a") as f:
+        f.write(f"- [{utc()}] {phase}: {note}\n")
+
+
+# ----------------------------- subcommands -----------------------------
+
+def cmd_handoff(a, cfg, dry, token):
+    rid = a.run or run_id()
+    rd = run_dir(cfg, rid)
+    rd.mkdir(parents=True, exist_ok=True)
+    meta = {
+        "run_id": rid, "repo": a.repo or cfg["target_repo"], "feature": a.feature,
+        "work": a.work, "issue": None, "cycle": 0, "good": False,
+        "round": 0, "max_round": cfg["require_mgmt"]["max_question_rounds"],
+        "created": utc(),
+    }
+    (rd / "handoff.md").write_text(
+        f"# Hand-off {rid}\n\n- work: {a.work}\n- target feature/workflow: {a.feature}\n- repo: {meta['repo']}\n"
+    )
+    if a.repo and meta["repo"] != a.repo:
+        meta["repo"] = a.repo
+    log_run(cfg, rid, "handoff", f"epic '{a.feature}' on {meta['repo']}")
+
+    if dry:
+        print("DRY  create epic issue: [epic] " + a.feature)
+        questions = heuristic_questions(a.feature, a.work)
+        print("DRY  interview: " + "; ".join(questions))
+        (rd / "interview.md").write_text(
+            f"# Interview {rid}\n\n## Round 1 — engine questions\n\n" + "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1))
+            + "\n\n_Status: awaiting user answers (DRY)._\n"
+        )
+        write_meta(cfg, rid, meta)
+        return
+
+    issue = gh.create_issue(meta["repo"], f"[epic] {a.feature}",
+                            f"**{a.work}**\n\nTarget feature/workflow: {a.feature}\n\n_(engine {rid})_")
+    meta["issue"] = issue["number"]
+    questions = heuristic_questions(a.feature, a.work)
+    (rd / "interview.md").write_text(
+        f"# Interview {rid}\n\n## Round 1 — engine questions\n\n" + "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1))
+        + "\n\n_Status: awaiting user answers._\n"
+    )
+    board(cfg, meta, f"**engine {rid}** hand-off received. Asking {len(questions)} clarifying question(s). "
+                     "Answer inline and I'll fold them in before kickoff.", dry=False, token=token)
+    write_meta(cfg, rid, meta)
+    print(f"epic #{meta['issue']} created on {meta['repo']}; interview started (round 1 of {meta['max_round']}).")
+    print("→ continue: python3 scripts/driver.py clarify --run " + rid + " --answer \"...\"")
+
+
+def cmd_clarify(a, cfg, dry, token):
+    rid = a.run
+    meta = read_meta(cfg, rid)
+    rd = run_dir(cfg, rid)
+    meta["round"] += 1
+    log_run(cfg, rid, "clarify", f"round {meta['round']} answer: {a.answer[:60]!r}")
+
+    good = meta["round"] >= meta["max_round"] or a.good
+    if good:
+        (rd / "plan.md").write_text(
+            f"# Plan {rid} (round {meta['round']}, marked good)\n\n- feature: {meta['feature']}\n- work: {meta['work']}\n"
+            f"- last user answer: {a.answer}\n\n## Tasks (provisional)\n1. scaffold project skeleton\n2. core feature\n3. tests\n"
+        )
+        meta["good"] = True
+        (rd / "interview.md").write_text(
+            (rd / "interview.md").read_text() + f"\n## Round {meta['round']} — user: {a.answer}\n\n_Status: GOOD (ready to kickoff) — plan drafted._\n"
+        )
+        board(cfg, meta, f"**engine {rid}** round {meta['round']} recorded. Plan marked GOOD — ready for `run` (cycle kickoff).", dry=dry, token=token)
+    else:
+        questions = heuristic_questions(meta["feature"], meta["work"])
+        nxt = questions[meta["round"] % len(questions)]
+        (rd / "interview.md").write_text(
+            (rd / "interview.md").read_text() + f"\n## Round {meta['round']} — user: {a.answer}\n\n_engine next question: {nxt}_\n"
+        )
+        board(cfg, meta, f"**engine {rid}** round {meta['round']} recorded. One more question: {nxt}", dry=dry, token=token)
+    write_meta(cfg, rid, meta)
+    if good:
+        print(f"plan marked GOOD. → start: python3 scripts/driver.py run --run {rid} --cycle 1")
+    else:
+        print(f"round {meta['round']}/{meta['max_round']} recorded. → answer next: ... clarify --run {rid} --answer \"...\"  (or --good to force plan)")
+
+
+def cmd_run(a, cfg, dry, token):
+    rid = a.run
+    meta = read_meta(cfg, rid)
+    if not meta.get("good"):
+        if dry:
+            print("DRY  (run skipped: plan not marked good; use `clarify --good` first)")
+        else:
+            sys.exit("plan not marked good yet — run `clarify --good` or answer the final round first.")
+    repo = meta["repo"]
+    base = gh.default_branch(repo) if not dry else "main"
+    branch = f"engine/{rid}"
+    co = checkout_path(cfg, repo)
+    meta["cycle"] = a.cycle
+    meta["status"] = f"cycle{a.cycle}-start"
+    write_meta(cfg, rid, meta)
+
+    if dry:
+        print(f"DRY  clone {repo} -> {co}; branch {branch}")
+        print(f"DRY  phases: think→complete→test→review→ship (base {base})")
+        return
+
+    # 1. clone/refresh
+    if not (co / ".git").exists():
+        git(["clone", f"https://github.com/{repo}.git", str(co)], token=token)
+    else:
+        git(["fetch", "origin"], cwd=str(co))
+    git(["checkout", "-B", branch, "origin/" + base], cwd=str(co))
+    materialize_agents(cfg, co)
+    git(["add", "-A"], cwd=str(co))
+    git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "commit", "-m", f"engine {rid}: bootstrap agents + plan"], cwd=str(co))
+    git(["push", "-u", "origin", branch], cwd=str(co), token=token)
+    board(cfg, meta, f"**engine {rid}** cycle {a.cycle} kickoff — branch `{branch}` created; plan + role agents in place.", dry=False, token=token)
+
+    # 2. think
+    opencode(cfg, "assembler",
+             f"Read handoff + plan at ENGINE_STATE. Produce ENGINE_PLAN/{rid}/PRD.md, design.md, tasks.md "
+             f"for the target feature '{meta['feature']}' in this repo. Keep it minimal and shippable.", co, dry=False)
+    git(["add", "-A"], cwd=str(co))
+    git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "commit", "-m", f"engine {rid}: plan"], cwd=str(co))
+    board(cfg, meta, f"**engine {rid}** Assembler produced plan under `ENGINE_PLAN/{rid}/`.", dry=False, token=token)
+
+    # 3. complete (engineer per task, sequential for MVP)
+    tasks_md = co / "ENGINE_PLAN" / rid / "tasks.md"
+    task_lines = []
+    if tasks_md.exists():
+        task_lines = [l.strip("- \t") for l in tasks_md.read_text().splitlines() if l.strip().startswith(("-", "1", "2", "3", "4", "5"))]
+    for i, task in enumerate(task_lines[:5], 1):
+        opencode(cfg, "engineer", f"Implement this ONE task and commit it: {task}", co, dry=False)
+        board(cfg, meta, f"**engine {rid}** Engineer completed task {i}: {task[:70]}", dry=False, token=token)
+
+    # 4. test (QA)
+    opencode(cfg, "qa", "Add/expand tests for the new feature, run the test suite, patch until green. "
+                        "Write results to the run trail.", co, dry=False)
+    log_run(cfg, rid, f"cycle{a.cycle}-qa", "qa phase done")
+    board(cfg, meta, f"**engine {rid}** QA ran the test suite for this cycle.", dry=False, token=token)
+
+    # 5. review
+    opencode(cfg, "reviewer", "Review the diff vs base for the target feature; write a verdict + report.", co, dry=False)
+    log_run(cfg, rid, f"cycle{a.cycle}-review", "reviewer phase done")
+
+    # 6. ship
+    pr = gh.create_pr(repo, f"[engine/{rid}] {meta['feature']} (cycle {a.cycle})",
+                      f"head={meta['repo'].split('/')[-1]}:{branch}", base,
+                      f"Automatic run of engine {rid} on cycle {a.cycle}. See ENGINE_PLAN/{rid}/ and run trail.")
+    board(cfg, meta, f"**engine {rid}** cycle {a.cycle} — PR #{pr['number']} opened: {pr['html_url']}", dry=False, token=token)
+    if cfg["gates"]["review"] == "auto_merge":
+        gh.merge_pr(repo, pr["number"])
+        board(cfg, meta, f"**engine {rid}** merged PR #{pr['number']} into {base}.", dry=False, token=token)
+    meta["status"] = f"cycle{a.cycle}-shipped"
+    write_meta(cfg, rid, meta)
+    print(f"cycle {a.cycle} complete: PR #{pr['number']} -> {pr['html_url']}")
+
+
+def cmd_report(a, cfg, dry, token):
+    rid = a.run
+    meta = read_meta(cfg, rid)
+    rd = run_dir(cfg, rid)
+    trail = (rd / "trail.md").read_text() if (rd / "trail.md").exists() else "(no trail)"
+    plan = (rd / "plan.md").read_text() if (rd / "plan.md").exists() else "(no plan)"
+    text = (
+        f"# Morning report {rid} · cycle {meta.get('cycle')}\n\n- repo: {meta['repo']}\n- feature: {meta['feature']}\n"
+        f"- status: {meta.get('status')}\n- good: {meta.get('good')}\n\n## Plan\n{plan}\n\n## Trail\n{trail}\n\n"
+        f"## Next (ask the user)\n- Does the outcome match the requirement? keep → cycle {meta.get('cycle', 0) + 1}; done → close epic.\n"
+    )
+    (rd / f"report-{a.cycle}.md").write_text(text)
+    if not dry:
+        gh.add_issue_comment(meta["repo"], meta["issue"], text)
+    print(text)
+
+
+def cmd_cycle(a, cfg, dry, token):
+    rid = a.run or run_id()
+    print("== handoff ==")
+    ns = argparse.Namespace(run=rid, work=a.work, feature=a.feature, repo=a.repo)
+    cmd_handoff(ns, cfg, dry, token)
+    meta = read_meta(cfg, rid)
+    if not meta.get("good"):
+        print("== clarify (auto-accepting heuristic answers for the demo cycle) ==")
+        for _ in range(meta["max_round"]):
+            cmd_clarify(argparse.Namespace(run=rid, answer="proceed with sensible defaults", good=True), cfg, dry, token)
+    print("== run cycle 1 ==")
+    cmd_run(argparse.Namespace(run=rid, cycle=1), cfg, dry, token)
+    print("== report ==")
+    cmd_report(argparse.Namespace(run=rid, cycle=1), cfg, dry, token)
+    print(f"\nDone (dry-run if flagged). run-id: {rid}")
+
+
+def build_parser():
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--repo", help="owner/name target repo (overrides config)")
+    common.add_argument("--dry-run", action="store_true", help="print the shell, no network/git")
+    p = argparse.ArgumentParser(description="p002 self* dev engine driver", parents=[common])
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    h = sub.add_parser("handoff", parents=[common]); h.add_argument("--work", required=True); h.add_argument("--feature", required=True); h.add_argument("--run")
+    c = sub.add_parser("clarify", parents=[common]); c.add_argument("--run", required=True); c.add_argument("--answer", default=""); c.add_argument("--good", action="store_true")
+    r = sub.add_parser("run", parents=[common]); r.add_argument("--run", required=True); r.add_argument("--cycle", type=int, default=1)
+    m = sub.add_parser("report", parents=[common]); m.add_argument("--run", required=True); m.add_argument("--cycle", type=int, default=1)
+    y = sub.add_parser("cycle", parents=[common]); y.add_argument("--work", required=True); y.add_argument("--feature", required=True); y.add_argument("--run")
+    return p
+
+
+def main():
+    args = build_parser().parse_args()
+    cfg = load_config()
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if args.cmd in ("handoff", "clarify", "run", "report", "cycle") and not args.dry_run and not token:
+        sys.exit("GITHUB_TOKEN not set in environment (required for network ops; set it, don't store it).")
+    handlers = {"handoff": cmd_handoff, "clarify": cmd_clarify, "run": cmd_run, "report": cmd_report, "cycle": cmd_cycle}
+    handlers[args.cmd](args, cfg, args.dry_run, token)
+
+
+if __name__ == "__main__":
+    main()

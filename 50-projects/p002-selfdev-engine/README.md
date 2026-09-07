@@ -1,13 +1,17 @@
 # p002 — The Self* Development Engine ("self-test / self-think / self-complete")
 
-**Project:** a self-hostable **software-development engine**: multiple agents, each playing a
-different product-development role (assembler, engineer, QA, reviewer, retro, **researcher**),
-operating **through a GitHub repo** (issues → branches → PRs = self-accessing GitHub), with a built-in
-**self-testing loop** (write + run tests to green) and a **self-improvement loop** (retrospective
-agent rewrites the engine's own role briefs/evals from run outcomes).
-**Status:** 🟡 DESIGNED — design doc + operating model written (s002); no code yet.
+**Project:** a self-hostable **software-development engine** meant to be prompted with **any project**:
+multiple agents, each playing a different product-development role (assembler, engineer, QA, reviewer,
+retro, **researcher**), operating **through a GitHub repo** (issues → branches → PRs = self-accessing
+GitHub), with a built-in **self-testing loop** (write + run tests to green) and a **self-improvement
+loop** (retrospective agent rewrites the engine's own role briefs/evals from run outcomes).
+**Targets:** engine is repo-agnostic (`--repo owner/name`); `nkyang10/cloud-pos-system` is the
+**playground** for its test runs, not the project.
+**Status:** ⚙️ IMPLEMENTED (mvp) — driver + role prompts written and `--dry-run` validated (s002);
+live run against the playground pending.
 **Bible:** `40-knowledge/multi-agent-sdlc-engine-research.md` (landscape + prior art) ·
 `40-knowledge/opencode-server-api.md` (driving opencode agents).
+**Dev loop:** `30-runbooks/rb-002-night-cycle.md` (hand-off → clarify → run → morning report).
 **Why first:** the final IDE (p001) is huge; this engine is the smallest thing that proves the
 core loop — *machines that plan, build, verify, and get themselves better* — before building UI.
 
@@ -91,8 +95,8 @@ the machine's **workspace**, its **shared discussion board**, and its **audit tr
 | Piece | Choice (MVP) | Rationale / rejected alternatives |
 |---|---|---|
 | Agent runtime | **opencode** (CLI role sessions + subagents / server API) | Our existing stack; roles = subagents with custom briefs; server later enables parallelism & p001 reuse |
-| GitHub access | **`gh` CLI + `git`** | Simple, scriptable, no API key plumbing (key lives in env, per security rules) |
-| Orchestrator | bash/cli scripts + state dir `ENGINE_STATE/` | MVP; revisit if state gets complex (→ sqlite/docs like `20-logs`) |
+| GitHub access | **`git` CLI + stdlib REST client** (`scripts/github_api.py`) | `gh` not preinstalled on dev-station; token lives in env only, per security rules |
+| Orchestrator | `scripts/driver.py` (stdlib, argparse) + state dir `ENGINE_STATE/` | MVP; revisit if state gets complex (→ sqlite/docs like `20-logs`) |
 | Self-testing | QA runs the repo's real test runner (`pytest`/`npm test`/…) | Rejected: synthetic test-only evals first round |
 | Self-improvement | RETRO → appends `LESSONS.md` + drafts new role-brief text; diff is PR'd | SICA-style source-rewrite deferred (it worked, but riskier); slate: prompt-level improve |
 | Requirements gate | engine↭user interview until both say "good"; morning checkpoint report | the "question-exchange" the user asked for; no autonomous kickoff before "good" |
@@ -148,5 +152,5 @@ the machine's **workspace**, its **shared discussion board**, and its **audit tr
 ## References
 - Research + prior art: `40-knowledge/multi-agent-sdlc-engine-research.md`
 - opencode server API / subagents: `40-knowledge/opencode-server-api.md`
-- Decisions: `40-knowledge/decisions-log.md` (DEC-005)
-- Dev loop: `30-runbooks/rb-001-local-dev-loop.md`
+- Decisions: `40-knowledge/decisions-log.md` (DEC-005, DEC-006)
+- Dev loop: `30-runbooks/rb-002-night-cycle.md` (night-cycle ops) · `30-runbooks/rb-001-local-dev-loop.md`

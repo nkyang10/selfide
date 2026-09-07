@@ -18,3 +18,8 @@
 | 2026-09-07 | s002 | p002 | edit README.md: add Operating-model (overnight cycle) section + researcher role + MVP as night-cycles | 0 | FE-002 spec+status written; engine.yaml.example extended (night_cycle, require_mgmt, researcher) |
 | 2026-09-07 | s002 | p002 | write features/FE-002-operating-cycle/spec.md + status.md; prompts/researcher.md | 0 | operating cycle designed verbatim to user usage |
 | 2026-09-07 | s002 | knowledge | append DEC-006 to decisions-log.md (and fix DEC-005 header placement) | 0 | overnight-cycle decision recorded |
+| 2026-09-07 | s002 | ide | git add/commit/push ide control center -> nkyang10/selfide (main) | 0 | mirror live; remote URL cleaned of token after push |
+| 2026-09-07 | s002 | p002 | write scripts/github_api.py, scripts/driver.py, prompts/{assembler,engineer,qa,reviewer,researcher,retro}.md, config/engine.json.example, rm templates, add .opencode/agent/README | 0 | engine MVP implemented |
+| 2026-09-07 | s002 | p002 | `python3 -m py_compile driver.py github_api.py`; `driver --help`; `driver cycle --work ... --dry-run` | 0 | dry-run end-to-end OK; fixed --dry-run arg placement + dry interview file bug |
+| 2026-09-07 | s002 | docs | write 30-runbooks/rb-002-night-cycle.md + index; update FE-001/002 status.md; DEC-007; README status | 0 | ops docs recorded |
+| 2026-09-07 | s002 | folder | git push selfide with engine (second push) | 0 | selfide updated (after final tidy, verify) |

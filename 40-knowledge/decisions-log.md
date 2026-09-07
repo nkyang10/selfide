@@ -55,6 +55,18 @@ Format:
   mandatory; `duration_hours` caps night spend. When p001 exists, the interview + morning report move
   to the mobile push channel.
 
+### DEC-007 — p002 MVP engine: driver in stdlib Python, roles as generated opencode agents (2026-09-07)
+- **Decision:** Engine = `scripts/driver.py` (argparse, subcommands handoff|clarify|run|report|cycle) +
+  a thin stdlib `github_api.py` REST client; role agents are **generated** into each worktree's
+  `.opencode/agent/` from canonical `prompts/<role>.md` (frontmatter table in driver). Config is
+  `config/engine.json` (TOML/YAML avoided — stdlib only). Target repo is pluggable (`--repo owner/name`).
+- **Rationale:** stdlib-only keeps the engine dependency-free; generated agents keep `prompts/` as a
+  single improvable source of truth (RETRO edits prompts, not copies). `--dry-run` gives risk-free testing.
+- **Alternatives rejected:** `gh` CLI dependency (not installed here); YAML/TOML config (no yaml in stdlib);
+  hand-maintained agent files per checkout (drift risk with RETRO).
+- **Consequences / revisit when:** the opencode agent frontmatter schema is the fragile part — must be
+  verified live; if opencode `--agent` requires primary-mode agents, flip `mode: all` accordingly.
+
 ### DEC-005 — p002: the self* development engine, designed not built (2026-09-07)
 - **Decision:** New active project `50-projects/p002-selfdev-engine`: a self-hostable engine where role
   agents (assembler, engineer, QA, reviewer, retro) drive a product through GitHub (issue→branch→PR),

@@ -20,5 +20,8 @@ coverage/
 .idea/
 .vscode/
 
+# p002 engine generated state (keep LESSONS.md/README tracked; ignore runs)
+50-projects/p002-selfdev-engine/ENGINE_STATE/runs/
+
 # Logs that are not session/command records
 *.log

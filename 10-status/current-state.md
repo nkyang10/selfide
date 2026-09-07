@@ -49,3 +49,13 @@ A web-interface wrapper around **opencode** (`opencode serve`, HTTP REST + SSE o
   report → loop on same repo until "requirement reached". Added FE-002 + `researcher` role; DEC-006.
 - Build still not started; FU-007 (go-ahead to build) now concretely means: implement FE-001+FE-002 on a
   scratch repo.
+
+## s002 addendum 3 (engine built — 2026-09-07)
+- **p002 engine MVP implemented + dry-run validated**: `scripts/driver.py` (#handoff/clarify/run/report/cycle),
+  stdlib `github_api.py`, role prompts (assembler/engineer/qa/reviewer/researcher/retro), config/engine.json,
+  `--dry-run` passes end-to-end. DEC-007. Runbook rb-002 added.
+- **GitHub live**: new repos `nkyang10/selfide` (main, pushed) = home of the ide control center;
+  `nkyang10/cloud-pos-system` = playground for engine test runs. Token scoped admin on both.
+- **Engine scope note (user)**: engine is generic — prompt it with ANY project; cloud-pos-system is only
+  a test playground.
+- Next: live engine run on the playground (needs user go + model config).
