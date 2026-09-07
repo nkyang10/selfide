@@ -1,0 +1,34 @@
+engine:
+  driver: "python scripts/driver.py"
+  target_repo: ""        # "owner/name"; empty = create scratch repo (MVP flow) — set before run 1
+  model: ""              # empty = use opencode default
+  notifications: none    # none | gh-comment | board-post (later: p001 push)
+
+night_cycle:
+  duration_hours: 8      # max unattended window per night (= sleep time)
+  kickoff: confirm       # confirm=require user "good" on the plan; auto=start after interview
+  morning_report: on     # post summary to epic issue + save to ENGINE_STATE/reports/
+  loop_until_accepted: on # resume same repo next cycle until user says "requirement reached"
+
+require_mgmt:
+  interview: on          # engine↭user Q&A until both say "good"
+  max_question_rounds: 2 # then engine proposes a plan anyway for user to edit/reject
+
+roles:
+  assembler: { brief: "prompts/assembler.md", subagent: true }
+  engineer:  { brief: "prompts/engineer.md",  subagent: true, max_parallel: 3 }
+  qa:        { brief: "prompts/qa.md",        subagent: true }
+  reviewer:  { brief: "prompts/reviewer.md",  subagent: true }
+  researcher: { brief: "prompts/researcher.md", subagent: true, idle_poll_minutes: 30 }
+  retro:     { brief: "prompts/retro.md",     subagent: true }
+
+gates:
+  plan_gate: auto          # auto | human
+  review_gate: auto_merge  # auto_merge | require_human
+  qa_iterations: 3
+  review_rounds: 2
+
+state:
+  dir: ENGINE_STATE        # committed artifacts + (local) runs/
+  runs: runs
+  lessons: ENGINE_STATE/LESSONS.md
