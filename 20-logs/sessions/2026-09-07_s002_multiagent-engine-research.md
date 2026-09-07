@@ -65,3 +65,10 @@
 - Recommendation to adopt (small→medium): event-sourced `state.json` per run; step-level resume;
   opencode session-resume on crash; then move the engine's execution into a nightly GitHub Actions
   workflow; Temporal deferred.
+
+## Event-sourced resume implemented + validated (s002)
+- Per-cycle `state-<n>.json`: each phase persists {status,start,end,note} on completion (idempotent).
+- cmd_run: reads state; if a phase is done it's skipped; the first incomplete phase restarts IN PLACE
+  (no branch reset, worktrees kept); ship marked merged on skip.
+- Live test: seeded all-phases-done → all skip, rc=0, no agents/PRs. GitHub Actions hosting remains the
+  documented next step (needs opencode+provider on the runner).

@@ -336,8 +336,25 @@ def cmd_run(a, cfg, dry, token):
     rd = run_dir(cfg, rid)
     phases_fp = rd / f"phases-{a.cycle}.jsonl"
     worker_fp = rd / f"workers-{a.cycle}.jsonl"
+    state_fp = rd / f"state-{a.cycle}.json"
+    state = {}
+    if state_fp.exists():
+        try:
+            state = json.loads(state_fp.read_text())
+        except Exception:
+            state = {}
+    done = {k for k, v in state.items() if isinstance(v, dict) and v.get("status") == "done"}
+    resuming = bool(done)
+    if resuming:
+        print(f"· RESUME: {len(done)} phase(s) already done {sorted(done)} — continuing from the next incomplete", flush=True)
 
     def _phase(role):
+        """Returns (finish_fn_or_None, skipped). skipped=True when this phase already completed in an
+        earlier (crashed) attempt of the same cycle — the event-sourced resume gate."""
+        st = state.get(role)
+        if st and st.get("status") == "done":
+            print(f"· resume-skip phase[{role}]", flush=True)
+            return None, True
         rec = {"phase": role, "cycle": a.cycle, "start": utc()}
 
         def _finish(ok, note=""):
@@ -347,7 +364,11 @@ def cmd_run(a, cfg, dry, token):
             with phases_fp.open("a") as f:
                 f.write(json.dumps(rec) + "\n")
             print(f"· phase[{role}] {'ok' if ok else 'FAIL'} {note}", flush=True)
-        return rec, _finish
+            state[role] = {"status": "done" if ok else "failed",
+                           "start": rec["start"], "end": rec["end"], "note": note}
+            state_fp.write_text(json.dumps(state, indent=2))    # event-sourced: idempotent, survives crashes
+            return bool(ok)
+        return _finish, False
 
     meta["cycle"] = a.cycle
     meta["status"] = f"cycle{a.cycle}-start"
@@ -358,8 +379,8 @@ def cmd_run(a, cfg, dry, token):
         print(f"DRY  phases: think→complete→test→review→ship (base {base})")
         return
 
-    # 1. clone/refresh
-    if not dry:
+    # 1. clone/refresh — on a DIFFER-AHEAD resume, keep the existing worktree/branches (partial work is usable)
+    if not resuming and not dry:
         try:
             gh.delete_branch(repo, branch)      # drop stale engine/<rid> so re-push stays fast-forward
         except RuntimeError:
@@ -368,31 +389,38 @@ def cmd_run(a, cfg, dry, token):
         git(["clone", f"https://github.com/{repo}.git", str(co)], token=token)
     else:
         git(["fetch", "origin"], cwd=str(co))
-    git(["checkout", "-B", branch, "origin/" + base], cwd=str(co))
+    cur = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(co),
+                         capture_output=True, text=True).stdout.strip()
+    if not resuming or cur != branch:
+        git(["checkout", "-B", branch, "origin/" + base], cwd=str(co))
     materialize_agents(cfg, co)
     _git_commit_if_dirty(co, f"engine {rid}: bootstrap agents + plan")   # cycle 2+ already has these on main
     git(["push", "-u", "origin", branch], cwd=str(co), token=token)
-    board(cfg, meta, f"**engine {rid}** cycle {a.cycle} kickoff — branch `{branch}` created; plan + role agents in place.", dry=False, token=token)
+    if not resuming:
+        board(cfg, meta, f"**engine {rid}** cycle {a.cycle} kickoff — branch `{branch}` created; plan + role agents in place.", dry=False, token=token)
 
     # 2. think — if the Assembler doesn't produce a plan, abort loudly (no silent empty cycle)
-    _rec, _fin = _phase("assembler")
-    if not run_agent(cfg, "assembler",
-                     f"Read the context on this branch: if ENGINE_PLAN/{rid}/NEXT-CYCLE.md exists, treat its "
-                     f"proposals as the approved input for THIS cycle. Produce ENGINE_PLAN/{rid}/PRD.md, "
-                     f"design.md and tasks.md for the target feature '{meta['feature']}' in this repo. "
-                     f"Minimum: PRD.md with acceptance criteria and tasks.md with 1-5 ordered tasks, one "
-                     f"per line starting with '- '.",
-                     co, logfile=rd / f"agent-assembler-{a.cycle}.log", timeout=1500):
+    _fin, _skip = _phase("assembler")
+    if not _skip and not run_agent(cfg, "assembler",
+                       f"Read the context on this branch: if ENGINE_PLAN/{rid}/NEXT-CYCLE.md exists, treat its "
+                       f"proposals as the approved input for THIS cycle. Produce ENGINE_PLAN/{rid}/PRD.md, "
+                       f"design.md and tasks.md for the target feature '{meta['feature']}' in this repo. "
+                       f"Minimum: PRD.md with acceptance criteria and tasks.md with 1-5 ordered tasks, one "
+                       f"per line starting with '- '.",
+                       co, logfile=rd / f"agent-assembler-{a.cycle}.log", timeout=1500):
         log_run(cfg, rid, f"cycle{a.cycle}-assembler", "FAILED")
         board(cfg, meta, f"**engine {rid}** ✗ Assembler failed — cycle {a.cycle} aborted (no plan produced).", dry=False, token=token)
         _fin(False, "no plan produced")
         meta["status"] = f"cycle{a.cycle}-abort-assembler"
         write_meta(cfg, rid, meta)
         sys.exit(f"assembler agent failed for run {rid}")
-    _fin(True, "plan produced")
-    _git_commit_if_dirty(co, f"engine {rid}: plan")
-    git(["push", "origin", branch], cwd=str(co), token=token)
-    board(cfg, meta, f"**engine {rid}** Assembler plan committed under `ENGINE_PLAN/{rid}/`.", dry=False, token=token)
+    elif _skip:
+        pass
+    else:
+        _fin(True, "plan produced")
+        _git_commit_if_dirty(co, f"engine {rid}: plan")
+        git(["push", "origin", branch], cwd=str(co), token=token)
+        board(cfg, meta, f"**engine {rid}** Assembler plan committed under `ENGINE_PLAN/{rid}/`.", dry=False, token=token)
 
     # 3. complete — ENGINEERS IN PARALLEL (one isolated git worktree per task); each exit code and commit is checked
     tasks_md = co / "ENGINE_PLAN" / rid / "tasks.md"
@@ -406,120 +434,133 @@ def cmd_run(a, cfg, dry, token):
         meta["status"] = f"cycle{a.cycle}-abort-tasks"
         write_meta(cfg, rid, meta)
         sys.exit(f"no tasks parsed for run {rid}")
-    max_par = max(1, cfg.get("engineer", {}).get("max_parallel", 2))
+    _fin_eng, _skip_eng = _phase("engineers")
     ok_wts = []
     research_proc = None
     res_dir = Path(cfg["workdir"]) / f"res-{rid}"
-    for i, task in enumerate(task_lines, 1):
-        tb = f"engine/{rid}-t{i}-c{a.cycle}"            # per-cycle name: no clash with previous cycles' (deleted) task branches
-        wt = Path(cfg["workdir"]) / f"wt-{rid}-t{i}"
-        _clean_task_slot(co, tb, wt)
-        git(["worktree", "add", "-b", tb, str(wt), branch], cwd=str(co))
-    wts = [(i, t, Path(cfg["workdir"]) / f"wt-{rid}-t{i}", f"engine/{rid}-t{i}-c{a.cycle}") for i, t in enumerate(task_lines, 1)]
-    if cfg.get("researcher", {}).get("on", True):
-        res_dir.mkdir(parents=True, exist_ok=True)
-        (res_dir / "CONTEXT.md").write_text(
-            f"# Task context\n\n- feature: {meta['feature']}\n- work: {meta['work']}\n"
-            f"- run: {rid} on repo {meta['repo']}\n\nProduce ENGINE_RESEARCH.md as in your brief.\n")
-        research_proc = spawn_agent(cfg, "researcher",
-                                    f"Research the domain of '{meta['feature']}'. Write ENGINE_RESEARCH.md in this dir (real URLs).",
-                                    res_dir, logfile=rd / f"agent-researcher-{a.cycle}.log")
-    # — WORKER PIPELINE: a ThreadPool runs up to max_parallel engineers concurrently; a slow task no
-    #   longer stalls its batch slot; each worker phase is logged (start/end/exit/commits). —
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
     worker_fp = rd / f"workers-{a.cycle}.jsonl"
     worker_rows = []
-
-    def _append_worker(rec):
-        worker_rows.append(rec)
-        with worker_fp.open("a") as f:
-            f.write(json.dumps(rec) + "\n")
-
-    def _engineer_worker(item):
-        i, task, wt, tb = item
-        rec = {"worker": i, "role": "engineer", "task": task[:70], "branch": tb,
-               "start": utc(), "end": None, "exit": None, "commits": 0, "status": "failed"}
-        _append_worker(rec)
-        wlog = rd / f"agent-engineer-t{i}-c{a.cycle}.log"
-        p = spawn_agent(cfg, "engineer",
-                        f"Implement this ONE task from the plan and commit it as feat(<slug>): {task}",
-                        wt, logfile=wlog)
-        try:
-            rc = p.wait(timeout=3600)
-        except subprocess.TimeoutExpired:
-            p.kill()
-            rc = -1
-        if p._engine_log:
-            p._engine_log.close()
-            p._engine_log = None
-        rec["exit"] = rc
-        rec["end"] = utc()
-        if rc == 0:
-            _commit_if_dirty(wt, f"engine {rid} t{i}")
-            if _has_commit(wt, tb, base):
-                git(["push", "-u", "origin", tb], cwd=str(wt), token=token)
-                rec["status"] = "done"
-                rec["commits"] = 1
-            else:
-                rec["status"] = "no-commits"
-        _append_worker(rec)
-        return (i, task, wt, tb, rec)
-
-    wts = [(i, t, Path(cfg["workdir"]) / f"wt-{rid}-t{i}", f"engine/{rid}-t{i}-c{a.cycle}") for i, t in enumerate(task_lines, 1)]
-    ok_wts = []
-    with ThreadPoolExecutor(max_workers=max_par) as pool:
-        futures = [pool.submit(_engineer_worker, item) for item in wts]
-        for fut in as_completed(futures):
-            i, task, wt, tb, rec = fut.result()
-            if rec["status"] == "done":
-                ok_wts.append((i, task, wt, tb))
-                board(cfg, meta, f"**engine {rid}** Engineer done task {i} ({rec['end']}): {task[:70]}", dry=False, token=token)
-            else:
-                board(cfg, meta, f"**engine {rid}** ⚠/✗ Engineer task {i} {rec['status']} (exit {rec['exit']}) — skipped: {task[:60]}", dry=False, token=token)
-                log_run(cfg, rid, f"cycle{a.cycle}-engineer-t{i}", rec["status"])
-    ok_wts.sort(key=lambda t: t[0])          # deterministic merge order by task id
-    for i, task, wt, tb in ok_wts:
-        git(["merge", "--no-ff", "-m", f"engine {rid}: merge task {i}", tb], cwd=str(co))
-        git(["worktree", "remove", "--force", str(wt)], cwd=str(co))
-    if ok_wts:
-        git(["push", "origin", branch], cwd=str(co), token=token)
-    if research_proc is not None:
-        _rec, _fin = _phase("researcher")
-        try:
-            research_proc.wait(timeout=3600)
-        except subprocess.TimeoutExpired:
-            research_proc.kill()
-        if research_proc._engine_log:
-            research_proc._engine_log.close()
-            research_proc._engine_log = None
-        findings = res_dir / "ENGINE_RESEARCH.md"
-        _fin(findings.exists(), "findings file" if findings.exists() else "no findings")
-    if not dry:
-        for i, task, wt, tb in wts:
+    if not _skip_eng:
+        max_par = max(1, cfg.get("engineer", {}).get("max_parallel", 2))
+        ok_wts = []
+        research_proc = None
+        res_dir = Path(cfg["workdir"]) / f"res-{rid}"
+        for i, task in enumerate(task_lines, 1):
+            tb = f"engine/{rid}-t{i}-c{a.cycle}"            # per-cycle name: no clash with previous cycles' (deleted) task branches
+            wt = Path(cfg["workdir"]) / f"wt-{rid}-t{i}"
+            _clean_task_slot(co, tb, wt)
+            git(["worktree", "add", "-b", tb, str(wt), branch], cwd=str(co))
+        wts = [(i, t, Path(cfg["workdir"]) / f"wt-{rid}-t{i}", f"engine/{rid}-t{i}-c{a.cycle}") for i, t in enumerate(task_lines, 1)]
+        if cfg.get("researcher", {}).get("on", True):
+            res_dir.mkdir(parents=True, exist_ok=True)
+            (res_dir / "CONTEXT.md").write_text(
+                f"# Task context\n\n- feature: {meta['feature']}\n- work: {meta['work']}\n"
+                f"- run: {rid} on repo {meta['repo']}\n\nProduce ENGINE_RESEARCH.md as in your brief.\n")
+            research_proc = spawn_agent(cfg, "researcher",
+                                        f"Research the domain of '{meta['feature']}'. Write ENGINE_RESEARCH.md in this dir (real URLs).",
+                                        res_dir, logfile=rd / f"agent-researcher-{a.cycle}.log")
+        # — WORKER PIPELINE: a ThreadPool runs up to max_parallel engineers concurrently; a slow task no
+        #   longer stalls its batch slot; each worker phase is logged (start/end/exit/commits). —
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+        worker_fp = rd / f"workers-{a.cycle}.jsonl"
+        worker_rows = []
+    
+        def _append_worker(rec):
+            worker_rows.append(rec)
+            with worker_fp.open("a") as f:
+                f.write(json.dumps(rec) + "\n")
+    
+        def _engineer_worker(item):
+            i, task, wt, tb = item
+            rec = {"worker": i, "role": "engineer", "task": task[:70], "branch": tb,
+                   "start": utc(), "end": None, "exit": None, "commits": 0, "status": "failed"}
+            _append_worker(rec)
+            wlog = rd / f"agent-engineer-t{i}-c{a.cycle}.log"
+            p = spawn_agent(cfg, "engineer",
+                            f"Implement this ONE task from the plan and commit it as feat(<slug>): {task}",
+                            wt, logfile=wlog)
             try:
-                gh.delete_branch(repo, tb)   # housekeeping: merged or failed, the task branches are done
-            except RuntimeError:
-                pass
-    findings = res_dir / "ENGINE_RESEARCH.md"
-    if findings.exists():
-        board(cfg, meta, f"**engine {rid}** Researcher findings:\n\n" + findings.read_text()[:2000], dry=dry, token=token)
-    elif cfg.get("researcher", {}).get("on", True):
-        board(cfg, meta, f"**engine {rid}** Researcher produced no findings this cycle.", dry=dry, token=token)
-    if not ok_wts:
-        log_run(cfg, rid, f"cycle{a.cycle}-complete", "no tasks completed")
-        board(cfg, meta, f"**engine {rid}** ✗ No task completed — cycle {a.cycle} aborted before QA.", dry=False, token=token)
-        meta["status"] = f"cycle{a.cycle}-abort-eng"
-        write_meta(cfg, rid, meta)
-        sys.exit(f"no engineer task succeeded for run {rid}")
+                rc = p.wait(timeout=3600)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                rc = -1
+            if p._engine_log:
+                p._engine_log.close()
+                p._engine_log = None
+            rec["exit"] = rc
+            rec["end"] = utc()
+            if rc == 0:
+                _commit_if_dirty(wt, f"engine {rid} t{i}")
+                if _has_commit(wt, tb, base):
+                    git(["push", "-u", "origin", tb], cwd=str(wt), token=token)
+                    rec["status"] = "done"
+                    rec["commits"] = 1
+                else:
+                    rec["status"] = "no-commits"
+            _append_worker(rec)
+            return (i, task, wt, tb, rec)
+    
+        wts = [(i, t, Path(cfg["workdir"]) / f"wt-{rid}-t{i}", f"engine/{rid}-t{i}-c{a.cycle}") for i, t in enumerate(task_lines, 1)]
+        ok_wts = []
+        with ThreadPoolExecutor(max_workers=max_par) as pool:
+            futures = [pool.submit(_engineer_worker, item) for item in wts]
+            for fut in as_completed(futures):
+                i, task, wt, tb, rec = fut.result()
+                if rec["status"] == "done":
+                    ok_wts.append((i, task, wt, tb))
+                    board(cfg, meta, f"**engine {rid}** Engineer done task {i} ({rec['end']}): {task[:70]}", dry=False, token=token)
+                else:
+                    board(cfg, meta, f"**engine {rid}** ⚠/✗ Engineer task {i} {rec['status']} (exit {rec['exit']}) — skipped: {task[:60]}", dry=False, token=token)
+                    log_run(cfg, rid, f"cycle{a.cycle}-engineer-t{i}", rec["status"])
+        ok_wts.sort(key=lambda t: t[0])          # deterministic merge order by task id
+        for i, task, wt, tb in ok_wts:
+            git(["merge", "--no-ff", "-m", f"engine {rid}: merge task {i}", tb], cwd=str(co))
+            git(["worktree", "remove", "--force", str(wt)], cwd=str(co))
+        if ok_wts:
+            git(["push", "origin", branch], cwd=str(co), token=token)
+        if research_proc is not None:
+            _finr, _skipr = _phase("researcher")
+            if not _skipr:
+                try:
+                    research_proc.wait(timeout=3600)
+                except subprocess.TimeoutExpired:
+                    research_proc.kill()
+                if research_proc._engine_log:
+                    research_proc._engine_log.close()
+                    research_proc._engine_log = None
+            findings = res_dir / "ENGINE_RESEARCH.md"
+            if not _skipr:
+                _finr(findings.exists(), "findings file" if findings.exists() else "no findings")
+        if not dry:
+            for i, task, wt, tb in wts:
+                try:
+                    gh.delete_branch(repo, tb)   # housekeeping: merged or failed, the task branches are done
+                except RuntimeError:
+                    pass
+        findings = res_dir / "ENGINE_RESEARCH.md"
+        if findings.exists():
+            board(cfg, meta, f"**engine {rid}** Researcher findings:\n\n" + findings.read_text()[:2000], dry=dry, token=token)
+        elif cfg.get("researcher", {}).get("on", True):
+            board(cfg, meta, f"**engine {rid}** Researcher produced no findings this cycle.", dry=dry, token=token)
+        if not ok_wts:
+            log_run(cfg, rid, f"cycle{a.cycle}-complete", "no tasks completed")
+            board(cfg, meta, f"**engine {rid}** ✗ No task completed — cycle {a.cycle} aborted before QA.", dry=False, token=token)
+            meta["status"] = f"cycle{a.cycle}-abort-eng"
+            write_meta(cfg, rid, meta)
+            sys.exit(f"no engineer task succeeded for run {rid}")
+        _fin_eng(len(ok_wts) > 0, f"{len(ok_wts)}/{len(task_lines)} tasks merged")
+    else:
+        pass
 
     # 4. test (QA) — a failing QA gate blocks the auto-merge
-    _rec, _fin = _phase("qa")
-    qa_ok = run_agent(cfg, "qa",
-                      "Build/fix tests for the implemented feature so the project's test suite passes. "
-                      "Run it. If the suite cannot run, say so in a TESTING.md and state the blocker.",
-                      co, logfile=rd / f"agent-qa-{a.cycle}.log", timeout=2400)
-    _fin(qa_ok, "suite green" if qa_ok else "suite failed")
+    _fin, _skip = _phase("qa")
+    qa_ok = True if _skip else run_agent(cfg, "qa",
+                        "Build/fix tests for the implemented feature so the project's test suite passes. "
+                        "Run it. If the suite cannot run, say so in a TESTING.md and state the blocker.",
+                        co, logfile=rd / f"agent-qa-{a.cycle}.log", timeout=2400)
+    if not _skip:
+        _fin(qa_ok, "suite green" if qa_ok else "suite failed")
     log_run(cfg, rid, f"cycle{a.cycle}-qa", "ok" if qa_ok else "FAILED")
     _git_commit_if_dirty(co, f"engine {rid}: tests")
     if qa_ok:
@@ -528,26 +569,30 @@ def cmd_run(a, cfg, dry, token):
         board(cfg, meta, f"**engine {rid}** ✗ QA failed — PR will NOT auto-merge this cycle.", dry=False, token=token)
 
     # 5. review — verdict must be present and APPROVE for auto-merge
-    _rec, _fin = _phase("reviewer")
-    run_agent(cfg, "reviewer",
-              "Review the diff vs base for the target feature; write a verdict file ENGINE_STATE/review.md "
-              "containing a line `verdict: APPROVE` or `verdict: REQUEST_CHANGES`, then your findings.",
-              co, logfile=rd / f"agent-reviewer-{a.cycle}.log", timeout=2400)
+    _fin, _skip = _phase("reviewer")
+    if not _skip:
+        run_agent(cfg, "reviewer",
+                  "Review the diff vs base for the target feature; write a verdict file ENGINE_STATE/review.md "
+                  "containing a line `verdict: APPROVE` or `verdict: REQUEST_CHANGES`, then your findings.",
+                  co, logfile=rd / f"agent-reviewer-{a.cycle}.log", timeout=2400)
+        _fin(True, "verdict written")
     log_run(cfg, rid, f"cycle{a.cycle}-review", "done")
-    _fin(True, "verdict written")
     # 5b. design — Research + Design parties propose the NEXT cycle's tasks/refinements (every cycle)
+    nxt = co / "ENGINE_PLAN" / rid / "NEXT-CYCLE.md"
     if cfg.get("designer", {}).get("on", True):
-        _rec, _fin = _phase("designer")
-        d_ok = run_agent(cfg, "designer",
-                         f"Design the next cycle. Read ENGINE_PLAN/{rid}/, the review verdict at ENGINE_STATE/review.md, "
-                         f"the researcher findings at {res_dir}/ENGINE_RESEARCH.md (if present), the code shipped this cycle, "
-                         f"and the user requirement '{meta['feature']}'. Then write ENGINE_PLAN/{rid}/NEXT-CYCLE.md as in your brief.",
-                         co, logfile=rd / f"agent-designer-{a.cycle}.log", timeout=1800)
-        nxt = co / "ENGINE_PLAN" / rid / "NEXT-CYCLE.md"
-        _fin(d_ok and nxt.exists(), "NEXT-CYCLE.md" if nxt.exists() else "no proposals")
-        if nxt.exists():
-            (rd / f"next-cycle-{a.cycle}.md").write_text(nxt.read_text())
-            board(cfg, meta, f"**engine {rid}** Workshop proposal → **next cycle**:\n\n" + nxt.read_text()[:1800], dry=False, token=token)
+        _fin, _skip = _phase("designer")
+        if _skip:
+            pass
+        else:
+            d_ok = run_agent(cfg, "designer",
+                             f"Design the next cycle. Read ENGINE_PLAN/{rid}/, the review verdict at ENGINE_STATE/review.md, "
+                             f"the researcher findings at {res_dir}/ENGINE_RESEARCH.md (if present), the code shipped this cycle, "
+                             f"and the user requirement '{meta['feature']}'. Then write ENGINE_PLAN/{rid}/NEXT-CYCLE.md as in your brief.",
+                             co, logfile=rd / f"agent-designer-{a.cycle}.log", timeout=1800)
+            _fin(d_ok and nxt.exists(), "NEXT-CYCLE.md" if nxt.exists() else "no proposals")
+            if nxt.exists():
+                (rd / f"next-cycle-{a.cycle}.md").write_text(nxt.read_text())
+                board(cfg, meta, f"**engine {rid}** Workshop proposal → **next cycle**:\n\n" + nxt.read_text()[:1800], dry=False, token=token)
     git(["add", "-A"], cwd=str(co))
     status = subprocess.run(["git", "status", "--porcelain"], cwd=str(co), capture_output=True, text=True).stdout
     if status.strip():
@@ -561,26 +606,30 @@ def cmd_run(a, cfg, dry, token):
             break
 
     # 6. ship — merge only when: gate auto AND QA ok AND reviewer explicitly approved
-    pr = gh.create_pr(repo, f"[engine/{rid}] {meta['feature']} (cycle {a.cycle})",
-                      f"head={meta['repo'].split('/')[-1]}:{branch}", base,
-                      f"Automatic run of engine {rid} on cycle {a.cycle}.\n\nplan: ENGINE_PLAN/{rid}/\nQA: {'passed' if qa_ok else 'failed'}\nreviewer verdict: {verdict}")
-    board(cfg, meta, f"**engine {rid}** cycle {a.cycle} — PR #{pr['number']} opened: {pr['html_url']}", dry=False, token=token)
-    gate = cfg["gates"]["review"]
-    merged = False
-    if gate == "require_human":
-        board(cfg, meta, f"**engine {rid}** review gate = human — PR #{pr['number']} left for you to review/merge.", dry=False, token=token)
-    elif not qa_ok:
-        board(cfg, meta, f"**engine {rid}** QA failed — PR #{pr['number']} left open (no auto-merge).", dry=False, token=token)
-    elif verdict != "approve":
-        board(cfg, meta, f"**engine {rid}** reviewer: {verdict} — PR #{pr['number']} left open for human review.", dry=False, token=token)
+    _fin, _skip = _phase("ship")
+    if _skip:
+        merged = True                      # already merged in a prior (crashed) attempt
+        pr = {"number": "?"}
     else:
-        gh.merge_pr(repo, pr["number"])
-        merged = True
-        board(cfg, meta, f"**engine {rid}** merged PR #{pr['number']} into {base}.", dry=False, token=token)
+        pr = gh.create_pr(repo, f"[engine/{rid}] {meta['feature']} (cycle {a.cycle})",
+                          f"head={meta['repo'].split('/')[-1]}:{branch}", base,
+                          f"Automatic run of engine {rid} on cycle {a.cycle}.\n\nplan: ENGINE_PLAN/{rid}/\nQA: {'passed' if qa_ok else 'failed'}\nreviewer verdict: {verdict}")
+        board(cfg, meta, f"**engine {rid}** cycle {a.cycle} — PR #{pr['number']} opened: {pr['html_url']}", dry=False, token=token)
+        gate = cfg["gates"]["review"]
+        merged = False
+        if gate == "require_human":
+            board(cfg, meta, f"**engine {rid}** review gate = human — PR #{pr['number']} left for you to review/merge.", dry=False, token=token)
+        elif not qa_ok:
+            board(cfg, meta, f"**engine {rid}** QA failed — PR #{pr['number']} left open (no auto-merge).", dry=False, token=token)
+        elif verdict != "approve":
+            board(cfg, meta, f"**engine {rid}** reviewer: {verdict} — PR #{pr['number']} left open for human review.", dry=False, token=token)
+        else:
+            gh.merge_pr(repo, pr["number"])
+            merged = True
+            board(cfg, meta, f"**engine {rid}** merged PR #{pr['number']} into {base}.", dry=False, token=token)
+        _fin(merged, f"PR #{pr['number']}")
     meta["status"] = f"cycle{a.cycle}-merged" if merged else f"cycle{a.cycle}-pr-open"
     write_meta(cfg, rid, meta)
-    _rec, _fin = _phase("ship")
-    _fin(merged, f"PR #{pr['number']}")
     n_done = len([w for w in worker_rows if w.get("status") == "done"])
     print(f"cycle {a.cycle}: {n_done}/{len(worker_rows)} workers done; phases/workers logged -> "
           f"{rd / f'phases-{a.cycle}.jsonl'}, {rd / f'workers-{a.cycle}.jsonl'}", flush=True)

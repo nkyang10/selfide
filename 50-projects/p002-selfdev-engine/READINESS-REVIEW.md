@@ -44,6 +44,7 @@
 | github.com flakiness (443 drops ~130s) | ✅ | git ops retry (3x, backoff); REST unaffected; one live push observed succeeding on retry |
 | Agent stdout deadlock (PIPE) | ✅ **fixed now** | agents stream to `ENGINE_STATE/runs/<id>/agent-*.log` instead of an undrained pipe |
 | **Lost/vanish role trigger** | ✅ **fixed now** | every agent run is exit-code-checked and retried once; phase artifacts are verified (plan tasks, per-task commits, QA result, APPROVE verdict); failures abort/skip **loudly** with board notes instead of silently continuing |
+| **Kill/crash → full redo** | ✅ **fixed now** | event-sourced `state-<cycle>.json` per phase; `run` resumes from the first incomplete phase, keeps branch/worktrees, skips completed phases — live-validated (all-skip, rc=0) |
 | **Idle forever / hang** | ✅ **fixed now** | every agent waits with a timeout (900–2400s) and is killed on expiry; REST calls now carry a 45s timeout (previously unbounded → could hang forever); git ops capped 200s/attempt |
 | FDs/cleanup | ✅ | stdout handles closed after wait; rogue worktrees removed; probe self-cleans |
 | Secrets | ✅ | token only via env; nothing committed (sweep done repeatedly) |
