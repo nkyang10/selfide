@@ -32,3 +32,5 @@
 | 2026-09-07 | s002 | p002 | cleanup probe artifacts | 0 | probe-base branch is the tmp default head on empty playground (not deletable w/o updating default); issues #1+#2 open; cleanup queued with token upgrade |
 | 2026-09-07 | s002 | p002 | `driver.py probe` on cloud-pos-system (perm re-check after user added Issues+PRs R&W) | 0 | ALL PASS: default/issue/comment/push/PR/close/delete. Repo repaired: default=main, probe branches deleted, old issues closed. Probe redesigned: branches off base, unique per-run branch, auto-cleanup |
 | 2026-09-07 | s002 | p002 | driver.py: git() retries (network flakiness to github.com:443 seen ~135s connect drops) | 0 | robustness added for night runs |
+| 2026-09-07 | s002 | p002 | write USER-GUIDE.md (user manual) + READINESS-REVIEW.md (step-by-step readiness) | 0 | documented usage + honest readiness verdict |
+| 2026-09-07 | s002 | p002 | fix: reviewer verdict now gates merge; agent stdout→run logs (deadlock fix); cycle2 re-push FF fix (delete stale branch); task-branch cleanup; log routing for all phases | 0 | readiness raised (was: decorative review, PIPE deadlock risk, cycle2 push break) |

@@ -11,7 +11,7 @@ loop** (retrospective agent rewrites the engine's own role briefs/evals from run
 live run against the playground pending.
 **Bible:** `40-knowledge/multi-agent-sdlc-engine-research.md` (landscape + prior art) ·
 `40-knowledge/opencode-server-api.md` (driving opencode agents).
-**Dev loop:** `30-runbooks/rb-002-night-cycle.md` (hand-off → clarify → run → morning report).
+**Docs:** `USER-GUIDE.md` (user manual) · `READINESS-REVIEW.md` (step-by-step readiness) · `30-runbooks/rb-002-night-cycle.md` (ops).
 **Why first:** the final IDE (p001) is huge; this engine is the smallest thing that proves the
 core loop — *machines that plan, build, verify, and get themselves better* — before building UI.
 
@@ -142,6 +142,8 @@ the machine's **workspace**, its **shared discussion board**, and its **audit tr
 |---|---|
 | `config/` | `engine.yaml.example` (roles, iteration caps, gates) |
 | `prompts/` | role briefs (the improvable brain) |
+| `USER-GUIDE.md` | **user manual** — day-to-day usage |
+| `READINESS-REVIEW.md` | step-by-step readiness vs implementation |
 | `scripts/` | orchestrator + guards (SoT) |
 | `features/FE-001-core-pipeline/` | spec + status (think→complete→test→review) |
 | `features/FE-002-operating-cycle/` | spec + status (overnight cycle, interview, researcher, morning report) |

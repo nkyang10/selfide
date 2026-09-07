@@ -107,14 +107,16 @@ def git(args, cwd=None, dry=False, token=None, retries=3, timeout=200):
             time.sleep(3 * (attempt + 1))
 
 
-def opencode(cfg, agent, message, cwd, dry=False, timeout=900):
-    p = _opencode_popen(cfg, agent, message, cwd, dry=dry)
+def opencode(cfg, agent, message, cwd, dry=False, timeout=900, logfile=None):
+    p = _opencode_popen(cfg, agent, message, cwd, dry=dry, logfile=logfile)
     if p is None:
         return
     p.wait(timeout=timeout)
+    if p.stdout:
+        p.stdout.close()
 
 
-def _opencode_popen(cfg, agent, message, cwd, dry=False):
+def _opencode_popen(cfg, agent, message, cwd, dry=False, logfile=None):
     binp = cfg["opencode_bin"]
     cmd = [binp, "run", message, "--agent", agent, "--dir", str(cwd), "--auto", "--format", "json"]
     if cfg.get("model"):
@@ -123,7 +125,12 @@ def _opencode_popen(cfg, agent, message, cwd, dry=False):
         print(f"DRY  $ {binp} run <task> --agent {agent} --dir {cwd} --auto (parallel)")
         return None
     print(f"· spawn agent [{agent}] => {Path(cwd).name}", flush=True)
-    return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if logfile is None:
+        out = subprocess.DEVNULL
+    else:
+        Path(logfile).parent.mkdir(parents=True, exist_ok=True)
+        out = open(logfile, "ab")
+    return subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)
 
 
 def _commit_if_dirty(wt, msg):
@@ -275,6 +282,7 @@ def cmd_run(a, cfg, dry, token):
     base = gh.default_branch(repo) if not dry else "main"
     branch = f"engine/{rid}"
     co = checkout_path(cfg, repo)
+    rd = run_dir(cfg, rid)
     meta["cycle"] = a.cycle
     meta["status"] = f"cycle{a.cycle}-start"
     write_meta(cfg, rid, meta)
@@ -285,6 +293,11 @@ def cmd_run(a, cfg, dry, token):
         return
 
     # 1. clone/refresh
+    if not dry:
+        try:
+            gh.delete_branch(repo, branch)      # drop stale engine/<rid> so re-push stays fast-forward
+        except RuntimeError:
+            pass
     if not (co / ".git").exists():
         git(["clone", f"https://github.com/{repo}.git", str(co)], token=token)
     else:
@@ -299,7 +312,8 @@ def cmd_run(a, cfg, dry, token):
     # 2. think
     opencode(cfg, "assembler",
              f"Read handoff + plan at ENGINE_STATE. Produce ENGINE_PLAN/{rid}/PRD.md, design.md, tasks.md "
-             f"for the target feature '{meta['feature']}' in this repo. Keep it minimal and shippable.", co, dry=False)
+             f"for the target feature '{meta['feature']}' in this repo. Keep it minimal and shippable.", co,
+             logfile=rd / f"agent-assembler-{a.cycle}.log")
     git(["add", "-A"], cwd=str(co))
     git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "commit", "-m", f"engine {rid}: plan"], cwd=str(co))
     board(cfg, meta, f"**engine {rid}** Assembler produced plan under `ENGINE_PLAN/{rid}/`.", dry=False, token=token)
@@ -326,16 +340,21 @@ def cmd_run(a, cfg, dry, token):
                 f"# Task context\n\n- feature: {meta['feature']}\n- work: {meta['work']}\n"
                 f"- run: {rid} on repo {meta['repo']}\n\nProduce ENGINE_RESEARCH.md as in your brief.\n")
             research_proc = _opencode_popen(cfg, "researcher",
-                f"Research the domain of '{meta['feature']}'. Write ENGINE_RESEARCH.md in this dir (real URLs).", res_dir)
+                f"Research the domain of '{meta['feature']}'. Write ENGINE_RESEARCH.md in this dir (real URLs).", res_dir,
+                logfile=rd / f"agent-researcher-{a.cycle}.log")
         idx = 0
         while idx < len(wts):
             batch = wts[idx:idx + max_par]
             idx += len(batch)
             procs = []
             for i, task, wt, tb in batch:
-                procs.append((_opencode_popen(cfg, "engineer", f"Implement this ONE task and commit it as feat(<slug>): {task}", wt), i, task, wt, tb))
+                procs.append((_opencode_popen(cfg, "engineer",
+                                              f"Implement this ONE task and commit it as feat(<slug>): {task}", wt,
+                                              logfile=rd / f"agent-engineer-t{i}.log"), i, task, wt, tb))
             for p, i, task, wt, tb in procs:
                 p.wait(timeout=3600)
+                if p.stdout:
+                    p.stdout.close()
                 _commit_if_dirty(wt, f"engine {rid} t{i}")
                 git(["push", "-u", "origin", tb], cwd=str(wt), token=token)
                 board(cfg, meta, f"**engine {rid}** Engineer done task {i}: {task[:70]}", dry=dry, token=token)
@@ -343,32 +362,52 @@ def cmd_run(a, cfg, dry, token):
             git(["merge", "--no-ff", "-m", f"engine {rid}: merge task {i}", tb], cwd=str(co))
             git(["worktree", "remove", "--force", str(wt)], cwd=str(co))
         git(["push", "origin", branch], cwd=str(co), token=token)
+        if not dry:
+            for i, task, wt, tb in wts:
+                try:
+                    gh.delete_branch(repo, tb)   # housekeeping: task branches are merged already
+                except RuntimeError:
+                    pass
     if research_proc is not None:
         research_proc.wait(timeout=3600)
+        if research_proc.stdout:
+            research_proc.stdout.close()
         findings = res_dir / "ENGINE_RESEARCH.md"
         if findings.exists():
-            board(cfg, meta, "**engine {rid}** Researcher findings:\n\n" + findings.read_text()[:2000], dry=dry, token=token)
+            board(cfg, meta, f"**engine {rid}** Researcher findings:\n\n" + findings.read_text()[:2000], dry=dry, token=token)
         else:
             board(cfg, meta, f"**engine {rid}** Researcher produced no findings this cycle.", dry=dry, token=token)
 
     # 4. test (QA)
     opencode(cfg, "qa", "Add/expand tests for the new feature, run the test suite, patch until green. "
-                        "Write results to the run trail.", co, dry=False)
+                        "Write results to the run trail.", co, logfile=rd / f"agent-qa-{a.cycle}.log")
     log_run(cfg, rid, f"cycle{a.cycle}-qa", "qa phase done")
     board(cfg, meta, f"**engine {rid}** QA ran the test suite for this cycle.", dry=False, token=token)
 
-    # 5. review
-    opencode(cfg, "reviewer", "Review the diff vs base for the target feature; write a verdict + report.", co, dry=False)
+    # 5. review (verdict gates the merge)
+    opencode(cfg, "reviewer", "Review the diff vs base for the target feature; write a verdict + report.",
+             co, logfile=rd / f"agent-reviewer-{a.cycle}.log")
     log_run(cfg, rid, f"cycle{a.cycle}-review", "reviewer phase done")
+    verdict = None
+    for rp in (co / "ENGINE_STATE" / "runs" / rid / "review.md", co / "ENGINE_STATE" / "review.md", co / "review.md", co / "REVIEW.md"):
+        if rp.exists():
+            txt = rp.read_text()
+            verdict = "changes" if "REQUEST_CHANGES" in txt.upper() else ("approve" if "APPROVE" in txt.upper() else verdict)
+            break
 
     # 6. ship
     pr = gh.create_pr(repo, f"[engine/{rid}] {meta['feature']} (cycle {a.cycle})",
                       f"head={meta['repo'].split('/')[-1]}:{branch}", base,
                       f"Automatic run of engine {rid} on cycle {a.cycle}. See ENGINE_PLAN/{rid}/ and run trail.")
     board(cfg, meta, f"**engine {rid}** cycle {a.cycle} — PR #{pr['number']} opened: {pr['html_url']}", dry=False, token=token)
-    if cfg["gates"]["review"] == "auto_merge":
+    gate = cfg["gates"]["review"]
+    if gate == "require_human":
+        board(cfg, meta, f"**engine {rid}** review gate = human — PR #{pr['number']} left for you to review/merge.", dry=False, token=token)
+    elif verdict == "changes":
+        board(cfg, meta, f"**engine {rid}** Reviewer requests changes — PR #{pr['number']} left open for human review.", dry=False, token=token)
+    else:
         gh.merge_pr(repo, pr["number"])
-        board(cfg, meta, f"**engine {rid}** merged PR #{pr['number']} into {base}.", dry=False, token=token)
+        board(cfg, meta, f"**engine {rid}** merged PR #{pr['number']} into {base} (reviewer: {verdict or 'auto'}); ref {pr.get('merged_at') and 'merged'}.", dry=False, token=token)
     meta["status"] = f"cycle{a.cycle}-shipped"
     write_meta(cfg, rid, meta)
     print(f"cycle {a.cycle} complete: PR #{pr['number']} -> {pr['html_url']}")
