@@ -250,9 +250,10 @@ def cmd_handoff(a, cfg, dry, token):
     rid = a.run or run_id()
     rd = run_dir(cfg, rid)
     rd.mkdir(parents=True, exist_ok=True)
+    targets = [t.strip() for t in (a.targets or "").split("|") if t.strip()]
     meta = {
         "run_id": rid, "repo": a.repo or cfg["target_repo"], "feature": a.feature,
-        "work": a.work, "issue": None, "cycle": 0, "good": False,
+        "work": a.work, "issue": None, "cycle": 0, "good": False, "targets": targets,
         "round": 0, "max_round": cfg["require_mgmt"]["max_question_rounds"],
         "created": utc(),
     }
@@ -394,6 +395,7 @@ def cmd_run(a, cfg, dry, token):
     if not resuming or cur != branch:
         git(["checkout", "-B", branch, "origin/" + base], cwd=str(co))
     materialize_agents(cfg, co)
+    seed_targets(meta, co)
     _git_commit_if_dirty(co, f"engine {rid}: bootstrap agents + plan")   # cycle 2+ already has these on main
     git(["push", "-u", "origin", branch], cwd=str(co), token=token)
     if not resuming:
@@ -635,6 +637,58 @@ def cmd_run(a, cfg, dry, token):
           f"{rd / f'phases-{a.cycle}.jsonl'}, {rd / f'workers-{a.cycle}.jsonl'}", flush=True)
 
 
+def seed_targets(meta, co):
+    """Write ENGINE_STATE/TARGETS.md (unchecked) into the worktree if targets were handed off."""
+    if not meta.get("targets"):
+        return
+    tgt = co / "ENGINE_STATE" / "TARGETS.md"
+    if tgt.exists():
+        return
+    tgt.parent.mkdir(parents=True, exist_ok=True)
+    tgt.write_text("# Engine targets\n\n" + "\n".join(f"- [ ] {t}" for t in meta["targets"]) + "\n")
+    print(f"· seeded {len(meta['targets'])} targets -> {tgt.relative_to(co)}", flush=True)
+
+
+def targets_all_met(co):
+    """True when TARGETS.md exists and no line opens with '- [ ]'."""
+    tgt = co / "ENGINE_STATE" / "TARGETS.md"
+    if not tgt.exists():
+        return False
+    return not any(l.strip().startswith("- [ ]") or l.strip().startswith("* [ ]") for l in tgt.read_text().splitlines())
+
+
+def cmd_marathon(a, cfg, dry, token):
+    """Continuous run: repeat cycles until all TARGETS are met or max cycles reached."""
+    rid = a.run
+    meta = read_meta(cfg, rid)
+    repo = meta["repo"]
+    co = checkout_path(cfg, repo)
+    last = a.start - 1
+    consecutive_fail = 0
+    for cyc in range(a.start, a.max + 1):
+        log_run(cfg, rid, f"marathon-cycle-{cyc}", "begin")
+        extra = ["--dry-run"] if dry else []
+        rc = subprocess.run([sys.executable, str(Path(__file__)), "run", "--run", rid, "--cycle", str(cyc)] + extra,
+                            env=os.environ.copy()).returncode
+        if rc == 0:
+            consecutive_fail = 0
+            last = cyc
+            subprocess.run([sys.executable, str(Path(__file__)), "report", "--run", rid, "--cycle", str(cyc)] + extra,
+                           env=os.environ.copy())
+        else:
+            consecutive_fail += 1
+            log_run(cfg, rid, f"marathon-cycle-{cyc}", f"FAILED (run rc={rc})")
+            if consecutive_fail >= 3:
+                print(f"marathon abort: {consecutive_fail} consecutive failures", flush=True)
+                break
+        if targets_all_met(co):
+            print(f"marathon done: all targets met after cycle {last}", flush=True)
+            break
+        print(f"marathon: cycle {cyc} done (last good {last}, running) — sleeping {a.min_gap}s", flush=True)
+        time.sleep(a.min_gap)
+    print(f"marathon finished for {rid}: {last} cycles", flush=True)
+
+
 def cmd_report(a, cfg, dry, token):
     rid = a.run
     meta = read_meta(cfg, rid)
@@ -738,11 +792,12 @@ def build_parser():
     p = argparse.ArgumentParser(description="p002 self* dev engine driver", parents=[common])
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    h = sub.add_parser("handoff", parents=[common]); h.add_argument("--work", required=True); h.add_argument("--feature", required=True); h.add_argument("--run")
+    h = sub.add_parser("handoff", parents=[common]); h.add_argument("--work", required=True); h.add_argument("--feature", required=True); h.add_argument("--run"); h.add_argument("--targets", help="pipe(|)-separated acceptance targets, tracked in ENGINE_STATE/TARGETS.md")
     c = sub.add_parser("clarify", parents=[common]); c.add_argument("--run", required=True); c.add_argument("--answer", default=""); c.add_argument("--good", action="store_true")
     r = sub.add_parser("run", parents=[common]); r.add_argument("--run", required=True); r.add_argument("--cycle", type=int, default=1)
     m = sub.add_parser("report", parents=[common]); m.add_argument("--run", required=True); m.add_argument("--cycle", type=int, default=1)
     q = sub.add_parser("probe", parents=[common])
+    mar = sub.add_parser("marathon", parents=[common]); mar.add_argument("--run", required=True); mar.add_argument("--max", type=int, default=30); mar.add_argument("--start", type=int, default=1); mar.add_argument("--min-gap", type=int, default=60, help="seconds between cycles (provider backoff)")
     y = sub.add_parser("cycle", parents=[common]); y.add_argument("--work", required=True); y.add_argument("--feature", required=True); y.add_argument("--run")
     return p
 
@@ -753,7 +808,7 @@ def main():
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if args.cmd in ("handoff", "clarify", "run", "report", "cycle") and not args.dry_run and not token:
         sys.exit("GITHUB_TOKEN not set in environment (required for network ops; set it, don't store it).")
-    handlers = {"handoff": cmd_handoff, "clarify": cmd_clarify, "run": cmd_run, "report": cmd_report, "cycle": cmd_cycle, "probe": cmd_probe}
+    handlers = {"handoff": cmd_handoff, "clarify": cmd_clarify, "run": cmd_run, "report": cmd_report, "cycle": cmd_cycle, "probe": cmd_probe, "marathon": cmd_marathon}
     handlers[args.cmd](args, cfg, args.dry_run, token)
 
 
