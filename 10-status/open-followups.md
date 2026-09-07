@@ -15,7 +15,8 @@
 | FU-010 | 2026-09-07 s002 | **Model choice for role agents**: use default opencode config or pin a cheaper/faster model for QA/engineer? Affects cost of ≥3 MVP runs. | user | low | next session | open — config `model` in engine.json |
 | FU-011 | 2026-09-07 s002 | **Interview depth**: engine re-asks until BOTH say good; cap is `max_question_rounds` (default 2) — confirm OK, or prefer more rounds on complex work. | user | low | when clarifying UX | open |
 | FU-012 | 2026-09-07 s002 | **Live engine run** on playground `nkyang10/cloud-pos-system`: approve `run --cycle 1` with real opencode agent exec (creates branch+PR+merge). | user | high | next session | open — engine built & dry-run OK |
-| FU-013 | 2026-09-07 s002 | **Token hygiene**: the shared fine-grained PAT in chat should be **rotated**; document scopes needed (repo write, issues, PRs) in `00-env/`. | engine | medium | next session | open |
+| FU-013 | 2026-09-07 s002 | **Token permissions**: fine-grained PAT passed `probe` PARTIALLY — works: contents push, issue create, metadata. **Missing (403):** issue comments/edit/close (Issues R&W), pull requests create/merge (PRs R&W). Fix in GitHub → Developer settings → fine-grained PAT → repo permissions: **Issues: Read and write**, **Pull requests: Read and write** (Contents already R&W). Then re-probe. Also rotate token after testing (it's in chat history). | user | high | next session | open — probe FAIL list recorded |
+| FU-015 | 2026-09-07 s002 | **Playground cleanup**: close `cloud-pos-system` issues #1/#2 and delete `probe-base` branch (it became the tmp default until a real main exists) — possible after FU-013 perms. | engine | low | after FU-013 | open |
 
 ## Resolved
 

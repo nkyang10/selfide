@@ -64,6 +64,18 @@ def create_pr(repo, title, head, base, body):
     return request("POST", f"/repos/{repo}/pulls", d)[1]
 
 
+def close_pr(repo, pr_no):
+    return request("PATCH", f"/repos/{repo}/pulls/{pr_no}", {"state": "closed"})[1]
+
+
+def close_issue(repo, issue_no):
+    return request("PATCH", f"/repos/{repo}/issues/{issue_no}", {"state": "closed"})[1]
+
+
+def delete_branch(repo, branch):
+    return request("DELETE", f"/repos/{repo}/git/refs/heads/{branch}")[0]
+
+
 def get_pulls(repo, state="open", head=None):
     url = f"/repos/{repo}/pulls?state={state}&per_page=100"
     if head:

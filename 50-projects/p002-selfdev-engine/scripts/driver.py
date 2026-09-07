@@ -88,9 +88,9 @@ def git(args, cwd=None, dry=False, token=None):
     env = os.environ.copy()
     if token:
         b64 = base64.b64encode(f"x-access-token:{token}".encode()).decode()
-        env["GIT_CONFIG_COUNT"] = "2"
-        env["GIT_CONFIG_KEY_0"] = "http.extraHeader"
-        env["GIT_CONFIG_VALUE_0"] = "Authorization: Basic " + b64
+        env["GIT_CONFIG_COUNT"] = "1"
+        env["GIT_CONFIG_KEY_0"] = "http.https://github.com/.extraHeader"
+        env["GIT_CONFIG_VALUE_0"] = f"Authorization: Basic {b64}"
     cmd = ["git", *args]
     if dry:
         print("DRY  $ git " + " ".join(args) + f"  (cwd={cwd})")
@@ -399,6 +399,52 @@ def cmd_cycle(a, cfg, dry, token):
     print(f"\nDone (dry-run if flagged). run-id: {rid}")
 
 
+def cmd_probe(a, cfg, dry, token):
+    """Live permission probe: exercises every GitHub exchange the role agents make."""
+    repo = a.repo or cfg["target_repo"]
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    tag = f"permprobe/{ts}"
+    print(f"probe repo: {repo}")
+    ok = lambda cond, what: print(('PASS' if cond else 'FAIL'), '-', what)
+    try:
+        base = gh.default_branch(repo)
+        ok(base in ("main", "master"), f"default_branch -> {base}")
+    except RuntimeError as e:
+        ok(False, f"default_branch: {e}")
+        return
+    if dry:
+        print("DRY  full probe skipped (net required)")
+        return
+    try:
+        iss = gh.create_issue(repo, f"[engine] perm probe {ts}", "probe artifact, self-closed")
+        ok(iss.get("number"), f"create_issue -> #{iss.get('number')}")
+        gh.add_issue_comment(repo, iss["number"], "engine probe: comment write OK")
+        ok(True, "add_issue_comment OK")
+        gh.close_issue(repo, iss["number"])
+    except RuntimeError as e:
+        ok(False, f"issues/board: {e}")
+    try:
+        tmp = Path(cfg["workdir"]) / tag.replace("/", "_")
+        tmp.mkdir(parents=True, exist_ok=True)
+        (tmp / "probe.txt").write_text(f"engine permission probe {ts}\n")
+        git(["init", "-b", "probe-base"], cwd=str(tmp))
+        git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "add", "-A"], cwd=str(tmp))
+        git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "commit", "-m", tag], cwd=str(tmp))
+        git(["remote", "add", "origin", f"https://github.com/{repo}.git"], cwd=str(tmp))
+        git(["push", "-u", "origin", "probe-base"], cwd=str(tmp), token=token)
+        ok(True, f"git push to {repo} (branch {tag})")
+        pr = gh.create_pr(repo, f"[engine] perm probe {ts}", head=f"{repo.split('/')[0]}:probe-base", base=base,
+                          body="self-closed by probe")
+        ok(pr.get("number"), f"create_pr -> #{pr.get('number')}")
+        gh.close_pr(repo, pr["number"])
+        gh.delete_branch(repo, "probe-base")
+        ok(True, "close_pr + delete_branch OK")
+        git(["push", "origin", "--delete", "probe-base"], cwd=str(tmp), token=token)
+    except RuntimeError as e:
+        ok(False, f"pr/push: {e}")
+    print("probe complete (issue artifacts: closed)")
+
+
 def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--repo", help="owner/name target repo (overrides config)")
@@ -410,6 +456,7 @@ def build_parser():
     c = sub.add_parser("clarify", parents=[common]); c.add_argument("--run", required=True); c.add_argument("--answer", default=""); c.add_argument("--good", action="store_true")
     r = sub.add_parser("run", parents=[common]); r.add_argument("--run", required=True); r.add_argument("--cycle", type=int, default=1)
     m = sub.add_parser("report", parents=[common]); m.add_argument("--run", required=True); m.add_argument("--cycle", type=int, default=1)
+    q = sub.add_parser("probe", parents=[common])
     y = sub.add_parser("cycle", parents=[common]); y.add_argument("--work", required=True); y.add_argument("--feature", required=True); y.add_argument("--run")
     return p
 
@@ -420,7 +467,7 @@ def main():
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if args.cmd in ("handoff", "clarify", "run", "report", "cycle") and not args.dry_run and not token:
         sys.exit("GITHUB_TOKEN not set in environment (required for network ops; set it, don't store it).")
-    handlers = {"handoff": cmd_handoff, "clarify": cmd_clarify, "run": cmd_run, "report": cmd_report, "cycle": cmd_cycle}
+    handlers = {"handoff": cmd_handoff, "clarify": cmd_clarify, "run": cmd_run, "report": cmd_report, "cycle": cmd_cycle, "probe": cmd_probe}
     handlers[args.cmd](args, cfg, args.dry_run, token)
 
 

@@ -27,3 +27,6 @@
 | 2026-09-07 | s002 | p002 | driver.py: parallel engineers (per-task git worktrees, batched max_parallel) + background researcher during complete phase; config keys engineer.max_parallel/researcher.on | 0 | parallel multi-role cycle implemented |
 | 2026-09-07 | s002 | p002 | live smoke: `opencode run --agent assembler --auto` on a materialized agent | 0 | first inline permission {} rejected; block-YAML permission works; agent exec verified (wrote PONG.txt) |
 | 2026-09-07 | s002 | p002 | AGENT_FRONTMATTER → block-style YAML; py_compile + full dry-run pass | 0 | schema fix validated (see DEC-007 revisit) |
+| 2026-09-07 | s002 | p002 | `driver.py probe --repo nkyang10/cloud-pos-system` (live) | 0 | PASS: default_branch, create_issue, git push. FAIL 403: issue comments, issue PATCH, create_pr. Provisioned fine-grained PAT is missing Issues + Pull-requests (read&write) perms |
+| 2026-09-07 | s002 | p002 | fix git() credential helper (GIT_CONFIG_COUNT/KEY/VALUE env) | 0 | push actually works with Contents write; helper bug fixed (probe caught it) |
+| 2026-09-07 | s002 | p002 | cleanup probe artifacts | 0 | probe-base branch is the tmp default head on empty playground (not deletable w/o updating default); issues #1+#2 open; cleanup queued with token upgrade |
