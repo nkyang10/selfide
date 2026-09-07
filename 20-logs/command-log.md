@@ -24,3 +24,6 @@
 | 2026-09-07 | s002 | docs | write 30-runbooks/rb-002-night-cycle.md + index; update FE-001/002 status.md; DEC-007; README status | 0 | ops docs recorded |
 | 2026-09-07 | s002 | folder | git push selfide with engine (second push) | 0 | selfide updated (after final tidy, verify) |
 | 2026-09-07 | s002 | p002 | verify selfide remote tree (16 engine blobs), clean working tree; record DEC-008 (engine ships in selfide subfolder per user); reorg open-followups (FU-005/009/014 resolved) | 0 | docs updated; no code change |
+| 2026-09-07 | s002 | p002 | driver.py: parallel engineers (per-task git worktrees, batched max_parallel) + background researcher during complete phase; config keys engineer.max_parallel/researcher.on | 0 | parallel multi-role cycle implemented |
+| 2026-09-07 | s002 | p002 | live smoke: `opencode run --agent assembler --auto` on a materialized agent | 0 | first inline permission {} rejected; block-YAML permission works; agent exec verified (wrote PONG.txt) |
+| 2026-09-07 | s002 | p002 | AGENT_FRONTMATTER → block-style YAML; py_compile + full dry-run pass | 0 | schema fix validated (see DEC-007 revisit) |

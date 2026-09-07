@@ -47,6 +47,8 @@ def load_config():
         "state_dir": "ENGINE_STATE",
         "model": "",
         "roles": ["assembler", "engineer", "qa", "reviewer", "researcher", "retro"],
+        "engineer": {"max_parallel": 2},
+        "researcher": {"on": True},
         "gates": {"plan": "auto", "review": "auto_merge", "qa_iterations": 3, "review_rounds": 2},
         "require_mgmt": {"interview": True, "max_question_rounds": 2},
     }
@@ -97,15 +99,30 @@ def git(args, cwd=None, dry=False, token=None):
 
 
 def opencode(cfg, agent, message, cwd, dry=False, timeout=900):
+    p = _opencode_popen(cfg, agent, message, cwd, dry=dry)
+    if p is None:
+        return
+    p.wait(timeout=timeout)
+
+
+def _opencode_popen(cfg, agent, message, cwd, dry=False):
     binp = cfg["opencode_bin"]
     cmd = [binp, "run", message, "--agent", agent, "--dir", str(cwd), "--auto", "--format", "json"]
     if cfg.get("model"):
         cmd += ["-m", cfg["model"]]
     if dry:
-        print(f"DRY  $ {binp} run \"<task>\" --agent {agent} --dir {cwd} --auto (timeout {timeout}s)")
-        return
-    print(f"· running agent [{agent}] …", flush=True)
-    subprocess.run(cmd, cwd=str(cwd), check=True, timeout=timeout)
+        print(f"DRY  $ {binp} run <task> --agent {agent} --dir {cwd} --auto (parallel)")
+        return None
+    print(f"· spawn agent [{agent}] => {Path(cwd).name}", flush=True)
+    return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+
+def _commit_if_dirty(wt, msg):
+    st = subprocess.run(["git", "status", "--porcelain"], cwd=str(wt), capture_output=True, text=True).stdout.strip()
+    if st:
+        subprocess.run(["git", "add", "-A"], cwd=str(wt), check=True)
+        subprocess.run(["git", "-c", "user.name=engine", "-c", "user.email=engine@localhost", "commit", "-m", msg],
+                       cwd=str(wt), check=True)
 
 
 def board(cfg, meta, text, dry=False, token=None):
@@ -116,13 +133,15 @@ def board(cfg, meta, text, dry=False, token=None):
     gh.add_issue_comment(meta["repo"], meta["issue"], text)
 
 
+PERMS_FULL = "  read: allow\n  glob: allow\n  grep: allow\n  write: allow\n  edit: allow\n  bash: allow"
+PERMS_GIT = "  read: allow\n  glob: allow\n  grep: allow\n  write: allow\n  bash: allow"
 AGENT_FRONTMATTER = {
-    "assembler": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, bash: 'git *: allow'}",
-    "engineer": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, edit: allow, bash: allow}",
-    "qa": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, edit: allow, bash: allow}",
-    "reviewer": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, bash: 'git *: allow'}",
-    "researcher": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, bash: allow}",
-    "retro": "mode: all\npermission: {read: allow, glob: allow, grep: allow, write: allow, edit: allow}",
+    "assembler": "mode: all\npermission:\n" + PERMS_GIT,
+    "engineer": "mode: all\npermission:\n" + PERMS_FULL,
+    "qa": "mode: all\npermission:\n" + PERMS_FULL,
+    "reviewer": "mode: all\npermission:\n" + PERMS_GIT,
+    "researcher": "mode: all\npermission:\n" + PERMS_FULL,
+    "retro": "mode: all\npermission:\n  read: allow\n  glob: allow\n  grep: allow\n  write: allow\n  edit: allow",
 }
 
 
@@ -276,14 +295,52 @@ def cmd_run(a, cfg, dry, token):
     git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "commit", "-m", f"engine {rid}: plan"], cwd=str(co))
     board(cfg, meta, f"**engine {rid}** Assembler produced plan under `ENGINE_PLAN/{rid}/`.", dry=False, token=token)
 
-    # 3. complete (engineer per task, sequential for MVP)
+    # 3. complete — ENGINEERS IN PARALLEL (one isolated git worktree per task)
     tasks_md = co / "ENGINE_PLAN" / rid / "tasks.md"
     task_lines = []
     if tasks_md.exists():
         task_lines = [l.strip("- \t") for l in tasks_md.read_text().splitlines() if l.strip().startswith(("-", "1", "2", "3", "4", "5"))]
-    for i, task in enumerate(task_lines[:5], 1):
-        opencode(cfg, "engineer", f"Implement this ONE task and commit it: {task}", co, dry=False)
-        board(cfg, meta, f"**engine {rid}** Engineer completed task {i}: {task[:70]}", dry=False, token=token)
+    task_lines = [t for t in task_lines if t][:5]
+    max_par = max(1, cfg.get("engineer", {}).get("max_parallel", 2))
+    wts = []
+    research_proc = None
+    res_dir = Path(cfg["workdir"]) / f"res-{rid}"
+    if task_lines:
+        for i, task in enumerate(task_lines, 1):
+            tb = f"engine/{rid}/t{i}"
+            wt = Path(cfg["workdir"]) / f"wt-{rid}-t{i}"
+            git(["worktree", "add", "-b", tb, str(wt), branch], cwd=str(co))
+            wts.append((i, task, wt, tb))
+        if cfg.get("researcher", {}).get("on", True):
+            res_dir.mkdir(parents=True, exist_ok=True)
+            (res_dir / "CONTEXT.md").write_text(
+                f"# Task context\n\n- feature: {meta['feature']}\n- work: {meta['work']}\n"
+                f"- run: {rid} on repo {meta['repo']}\n\nProduce ENGINE_RESEARCH.md as in your brief.\n")
+            research_proc = _opencode_popen(cfg, "researcher",
+                f"Research the domain of '{meta['feature']}'. Write ENGINE_RESEARCH.md in this dir (real URLs).", res_dir)
+        idx = 0
+        while idx < len(wts):
+            batch = wts[idx:idx + max_par]
+            idx += len(batch)
+            procs = []
+            for i, task, wt, tb in batch:
+                procs.append((_opencode_popen(cfg, "engineer", f"Implement this ONE task and commit it as feat(<slug>): {task}", wt), i, task, wt, tb))
+            for p, i, task, wt, tb in procs:
+                p.wait(timeout=3600)
+                _commit_if_dirty(wt, f"engine {rid} t{i}")
+                git(["push", "-u", "origin", tb], cwd=str(wt), token=token)
+                board(cfg, meta, f"**engine {rid}** Engineer done task {i}: {task[:70]}", dry=dry, token=token)
+        for i, task, wt, tb in wts:
+            git(["merge", "--no-ff", "-m", f"engine {rid}: merge task {i}", tb], cwd=str(co))
+            git(["worktree", "remove", "--force", str(wt)], cwd=str(co))
+        git(["push", "origin", branch], cwd=str(co), token=token)
+    if research_proc is not None:
+        research_proc.wait(timeout=3600)
+        findings = res_dir / "ENGINE_RESEARCH.md"
+        if findings.exists():
+            board(cfg, meta, "**engine {rid}** Researcher findings:\n\n" + findings.read_text()[:2000], dry=dry, token=token)
+        else:
+            board(cfg, meta, f"**engine {rid}** Researcher produced no findings this cycle.", dry=dry, token=token)
 
     # 4. test (QA)
     opencode(cfg, "qa", "Add/expand tests for the new feature, run the test suite, patch until green. "

@@ -34,3 +34,10 @@
 - GitHub: created/used nkyang10/selfide (mirror of this control center, pushed) and
   nkyang10/cloud-pos-system (playground). DEC-007. FU-012..014 recorded.
 - s002 fully closed: research → design → MVP code (dry-validated).
+
+## Parallel-ready (late s002)
+- Engineers now run in parallel via per-task `git worktree` branches + batched spawn (max_parallel);
+  researcher runs concurrently as a background idle agent during the complete phase.
+- Live-verified the opencode role-agent path (real model call, file write): found agents need
+  block-style YAML `permission` (inline {} rejected by opencode schema); fixed in AGENT_FRONTMATTER.
+- Engine is now ready for a live multi-role (parallel) dev cycle on the playground.

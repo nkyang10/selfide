@@ -64,8 +64,9 @@ Format:
   single improvable source of truth (RETRO edits prompts, not copies). `--dry-run` gives risk-free testing.
 - **Alternatives rejected:** `gh` CLI dependency (not installed here); YAML/TOML config (no yaml in stdlib);
   hand-maintained agent files per checkout (drift risk with RETRO).
-- **Consequences / revisit when:** the opencode agent frontmatter schema is the fragile part — must be
-  verified live; if opencode `--agent` requires primary-mode agents, flip `mode: all` accordingly.
+- **Consequences / revisit when:** opencode agent `permission` must be **block-style YAML** (inline `{...}`
+  was rejected by opencode's schema validator — verified live 2026-09-07); agents use `mode: all` so
+  `opencode run --agent` can drive them; re-verify on opencode upgrades.
 
 ### DEC-005 — p002: the self* development engine, designed not built (2026-09-07)
 - **Decision:** New active project `50-projects/p002-selfdev-engine`: a self-hostable engine where role
