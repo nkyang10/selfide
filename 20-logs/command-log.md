@@ -30,3 +30,5 @@
 | 2026-09-07 | s002 | p002 | `driver.py probe --repo nkyang10/cloud-pos-system` (live) | 0 | PASS: default_branch, create_issue, git push. FAIL 403: issue comments, issue PATCH, create_pr. Provisioned fine-grained PAT is missing Issues + Pull-requests (read&write) perms |
 | 2026-09-07 | s002 | p002 | fix git() credential helper (GIT_CONFIG_COUNT/KEY/VALUE env) | 0 | push actually works with Contents write; helper bug fixed (probe caught it) |
 | 2026-09-07 | s002 | p002 | cleanup probe artifacts | 0 | probe-base branch is the tmp default head on empty playground (not deletable w/o updating default); issues #1+#2 open; cleanup queued with token upgrade |
+| 2026-09-07 | s002 | p002 | `driver.py probe` on cloud-pos-system (perm re-check after user added Issues+PRs R&W) | 0 | ALL PASS: default/issue/comment/push/PR/close/delete. Repo repaired: default=main, probe branches deleted, old issues closed. Probe redesigned: branches off base, unique per-run branch, auto-cleanup |
+| 2026-09-07 | s002 | p002 | driver.py: git() retries (network flakiness to github.com:443 seen ~135s connect drops) | 0 | robustness added for night runs |

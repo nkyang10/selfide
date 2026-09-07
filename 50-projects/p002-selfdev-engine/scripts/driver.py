@@ -17,6 +17,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -84,7 +85,7 @@ def checkout_path(cfg, repo):
     return Path(cfg["workdir"]) / name
 
 
-def git(args, cwd=None, dry=False, token=None):
+def git(args, cwd=None, dry=False, token=None, retries=3, timeout=200):
     env = os.environ.copy()
     if token:
         b64 = base64.b64encode(f"x-access-token:{token}".encode()).decode()
@@ -95,7 +96,15 @@ def git(args, cwd=None, dry=False, token=None):
     if dry:
         print("DRY  $ git " + " ".join(args) + f"  (cwd={cwd})")
         return
-    subprocess.run(cmd, cwd=cwd, check=True, env=env)
+    for attempt in range(retries):
+        try:
+            subprocess.run(cmd, cwd=cwd, check=True, env=env, timeout=timeout)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            if attempt == retries - 1:
+                raise
+            print(f"· git {args[:2]} failed (network?) — retry {attempt + 1}/{retries} …", flush=True)
+            time.sleep(3 * (attempt + 1))
 
 
 def opencode(cfg, agent, message, cwd, dry=False, timeout=900):
@@ -426,20 +435,21 @@ def cmd_probe(a, cfg, dry, token):
     try:
         tmp = Path(cfg["workdir"]) / tag.replace("/", "_")
         tmp.mkdir(parents=True, exist_ok=True)
-        (tmp / "probe.txt").write_text(f"engine permission probe {ts}\n")
-        git(["init", "-b", "probe-base"], cwd=str(tmp))
-        git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "add", "-A"], cwd=str(tmp))
-        git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "commit", "-m", tag], cwd=str(tmp))
-        git(["remote", "add", "origin", f"https://github.com/{repo}.git"], cwd=str(tmp))
-        git(["push", "-u", "origin", "probe-base"], cwd=str(tmp), token=token)
-        ok(True, f"git push to {repo} (branch {tag})")
-        pr = gh.create_pr(repo, f"[engine] perm probe {ts}", head=f"{repo.split('/')[0]}:probe-base", base=base,
-                          body="self-closed by probe")
-        ok(pr.get("number"), f"create_pr -> #{pr.get('number')}")
-        gh.close_pr(repo, pr["number"])
-        gh.delete_branch(repo, "probe-base")
-        ok(True, "close_pr + delete_branch OK")
-        git(["push", "origin", "--delete", "probe-base"], cwd=str(tmp), token=token)
+        pb = f"pbase-{ts}"
+        git(["clone", "--depth", "1", f"https://github.com/{repo}.git", str(tmp / "c")], dry=dry)
+        if not dry:
+            git(["checkout", "-b", pb, "origin/" + base], cwd=str(tmp / "c"))
+            (tmp / "c" / "probe.txt").write_text(f"engine permission probe {ts}\n")
+            git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "add", "-A"], cwd=str(tmp / "c"))
+            git(["-c", "user.name=engine", "-c", "user.email=engine@localhost", "commit", "-m", tag], cwd=str(tmp / "c"))
+            git(["push", "-u", "origin", pb], cwd=str(tmp / "c"), token=token)
+            ok(True, f"git push to {repo} (branch {pb})")
+            pr = gh.create_pr(repo, f"[engine] perm probe {ts}", head=f"{repo.split('/')[0]}:{pb}", base=base,
+                              body="self-closed by probe")
+            ok(pr.get("number"), f"create_pr -> #{pr.get('number')}")
+            gh.close_pr(repo, pr["number"])
+            gh.delete_branch(repo, pb)
+            ok(True, "close_pr + delete_branch OK")
     except RuntimeError as e:
         ok(False, f"pr/push: {e}")
     print("probe complete (issue artifacts: closed)")

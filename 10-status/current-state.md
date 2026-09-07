@@ -59,3 +59,10 @@ A web-interface wrapper around **opencode** (`opencode serve`, HTTP REST + SSE o
 - **Engine scope note (user)**: engine is generic — prompt it with ANY project; cloud-pos-system is only
   a test playground.
 - Next: live engine run on the playground (needs user go + model config).
+
+## s002 addendum 4 (permissions verified — 2026-09-07)
+- Engine's GitHub exchange layer **live-verified all green** on the playground: issues, board comments,
+  branch pushes, PR create/later merge, branch delete. Probe = `driver.py probe` (auto self-cleaning).
+- Playground repaired along the way: default branch = `main` (clean README), old probe issues/branches removed.
+- Git layer got retries (intermittent github.com:443 drops observed; REST unaffected).
+- Next: real night-cycle run (FU-012). Token rotation still pending after use (FU-013).
