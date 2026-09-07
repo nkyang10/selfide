@@ -635,6 +635,7 @@ def cmd_run(a, cfg, dry, token):
         merged = True                      # already merged in a prior (crashed) attempt
         pr = {"number": "?"}
     else:
+        time.sleep(4)                                           # let the freshly-pushed ref index before create_pr (avoids GH 500s)
         pr = gh.create_pr(repo, f"[engine/{rid}] {meta['feature']} (cycle {a.cycle})",
                           f"head={meta['repo'].split('/')[-1]}:{branch}", base,
                           f"Automatic run of engine {rid} on cycle {a.cycle} for epic #{meta['issue']}.\n\n"
@@ -716,9 +717,9 @@ def cmd_marathon(a, cfg, dry, token):
         else:
             consecutive_fail += 1
             log_run(cfg, rid, f"marathon-cycle-{cyc}", f"FAILED (run rc={rc})")
-            if _ship_only_pending(cfg, rid, cyc) and consecutive_fail <= 4:
+            if _ship_only_pending(cfg, rid, cyc) and consecutive_fail <= 6:
                 print(f"marathon: cycle {cyc} blocked at ship step only — resuming (cheap) …", flush=True)
-                time.sleep(30)
+                time.sleep(90)          # ride out a GitHub /pulls 500-flap window before the next cheap ship retry
                 continue          # retry the SAME cycle: resume skips straight to ship
             if consecutive_fail >= 3:
                 print(f"marathon abort: {consecutive_fail} consecutive failures", flush=True)
