@@ -581,6 +581,7 @@ def cmd_run(a, cfg, dry, token):
     log_run(cfg, rid, f"cycle{a.cycle}-review", "done")
     # 5b. design — Research + Design parties propose the NEXT cycle's tasks/refinements (every cycle)
     nxt = co / "ENGINE_PLAN" / rid / "NEXT-CYCLE.md"
+    proposals = []
     if cfg.get("designer", {}).get("on", True):
         _fin, _skip = _phase("designer")
         if _skip:
@@ -595,6 +596,9 @@ def cmd_run(a, cfg, dry, token):
             if nxt.exists():
                 (rd / f"next-cycle-{a.cycle}.md").write_text(nxt.read_text())
                 board(cfg, meta, f"**engine {rid}** Workshop proposal → **next cycle**:\n\n" + nxt.read_text()[:1800], dry=False, token=token)
+                if not dry:
+                    proposals = proposal_issues(meta, co, rd, a.cycle)   # each proposal = its own issue
+    seed_repo_meta_files(co)
     git(["add", "-A"], cwd=str(co))
     status = subprocess.run(["git", "status", "--porcelain"], cwd=str(co), capture_output=True, text=True).stdout
     if status.strip():
@@ -608,6 +612,12 @@ def cmd_run(a, cfg, dry, token):
             break
 
     # 6. ship — merge only when: gate auto AND QA ok AND reviewer explicitly approved
+    proposals_ref = ""
+    prq = rd / f"proposals-{a.cycle}.json"
+    if prq.exists():
+        nums = json.loads(prq.read_text())
+        if nums:
+            proposals_ref = "\nrelated proposals: " + ", ".join(f"#{n}" for n in nums)
     _fin, _skip = _phase("ship")
     if _skip:
         merged = True                      # already merged in a prior (crashed) attempt
@@ -615,7 +625,9 @@ def cmd_run(a, cfg, dry, token):
     else:
         pr = gh.create_pr(repo, f"[engine/{rid}] {meta['feature']} (cycle {a.cycle})",
                           f"head={meta['repo'].split('/')[-1]}:{branch}", base,
-                          f"Automatic run of engine {rid} on cycle {a.cycle}.\n\nplan: ENGINE_PLAN/{rid}/\nQA: {'passed' if qa_ok else 'failed'}\nreviewer verdict: {verdict}")
+                          f"Automatic run of engine {rid} on cycle {a.cycle} for epic #{meta['issue']}.\n\n"
+                          f"plan: ENGINE_PLAN/{rid}/\nQA: {'passed' if qa_ok else 'failed'}\n"
+                          f"reviewer verdict: {verdict}{proposals_ref}")
         board(cfg, meta, f"**engine {rid}** cycle {a.cycle} — PR #{pr['number']} opened: {pr['html_url']}", dry=False, token=token)
         gate = cfg["gates"]["review"]
         merged = False
@@ -687,6 +699,56 @@ def cmd_marathon(a, cfg, dry, token):
         print(f"marathon: cycle {cyc} done (last good {last}, running) — sleeping {a.min_gap}s", flush=True)
         time.sleep(a.min_gap)
     print(f"marathon finished for {rid}: {last} cycles", flush=True)
+
+
+def proposal_issues(meta, co, rd, cyc):
+    """Mirror each next-cycle proposal bullet to its own GitHub issue — visible, queryable, linkable."""
+    rid = meta["run_id"]
+    nxt = co / "ENGINE_PLAN" / rid / "NEXT-CYCLE.md"
+    out = []
+    if not nxt.exists():
+        return out
+    for line in nxt.read_text().splitlines():
+        l = line.strip()
+        if not l.startswith("- "):
+            continue
+        title = l.lstrip("- ").split("] ")[-1][:70] or l[:70]
+        body = (f"Proposal from engine run `{rid}` (cycle {cyc}) → epic #{meta['issue']} "
+                f"'{meta['feature']}'.\n\n> {l}\n\nAccepted proposals become the next cycle's tasks "
+                f"(see `ENGINE_PLAN/{rid}/NEXT-CYCLE.md`).")
+        try:
+            iss = gh.create_issue(meta["repo"], f"[proposal] {title}", body, labels=["engine/proposal"])
+            out.append(iss["number"])
+        except RuntimeError:
+            try:
+                iss = gh.create_issue(meta["repo"], f"[proposal] {title}", body)
+                out.append(iss["number"])
+            except RuntimeError:
+                pass
+    (rd / f"proposals-{cyc}.json").write_text(json.dumps(out))
+    return out
+
+
+def seed_repo_meta_files(co):
+    """Give the target repo a proper place to propose features: an issue template."""
+    tmpl = co / ".github" / "ISSUE_TEMPLATE" / "feature_request.yml"
+    tmpl.parent.mkdir(parents=True, exist_ok=True)
+    tmpl.write_text(
+        "name: Feature proposal\n"
+        "description: Propose a new feature or refinement (engine also files these per cycle)\n"
+        "labels: [\"enhancement\"]\n"
+        "body:\n"
+        "- type: markdown\n"
+        "  attributes:\n"
+        "    value: |\n"
+        "      Please keep the title self-describing (what it is, what it relates to).\n"
+        "- type: textarea\n"
+        "  attributes:\n"
+        "    label: What & why\n"
+        "  validations:\n"
+        "    required: true\n- type: textarea\n  attributes:\n    label: Acceptance criteria\n"
+        "  validations:\n    required: false\n"
+    )
 
 
 def cmd_report(a, cfg, dry, token):

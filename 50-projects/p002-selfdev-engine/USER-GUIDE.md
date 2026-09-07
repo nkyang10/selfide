@@ -68,7 +68,7 @@ What happens (all visible on the repo):
 | research | Researcher (idle, in parallel) | findings posted on the issue |
 | test | QA | tests added/run to green |
 | review | Reviewer | `review.md` verdict — `REQUEST_CHANGES` blocks the auto-merge |
-| **design (every cycle)** | Designer (product-design party) | **`ENGINE_PLAN/<run-id>/NEXT-CYCLE.md`** — new tasks/refinements for the NEXT cycle, posted on the board |
+| **design (every cycle)** | Designer (product-design party) | **`ENGINE_PLAN/<run-id>/NEXT-CYCLE.md`** + each proposal mirrored as its own **`[proposal] …` issue** (`engine/proposal` label), linked from the PR |
 | ship | driver | PR opened → merged into `main` (see gates below) |
 
 The loop is self-feeding: every cycle the **research party + product-design party** propose the next

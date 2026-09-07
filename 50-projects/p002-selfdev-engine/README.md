@@ -52,6 +52,9 @@ core loop — *machines that plan, build, verify, and get themselves better* —
 - **Idle research (L4 foreground):** a **researcher** agent is always active — scans the web for the
   subject area and feeds the board back toward the user requirement (new findings, better libraries,
   risks). Its output lands as issues/PR comments the other agents consume.
+- **Feature proposals = GitHub issues (not code commits):** every next-cycle proposal lands as its own
+  `[proposal] …` issue (label `engine/proposal`, feature-request template in `.github/`); PRs link
+  them. Issues/PR titles are self-describing: `[epic] …` / `[proposal] …` / `[engine/<rid>] cycle N — …`.
 - **Morning checkpoint:** the engine posts a summary (done / paused / decisions / questions). User says
   keep → refine → continue on the same repo; or accepts → **requirement reached** and the cycle closes.
 - **Recurring loop:** each overnight cycle resumes the same repo, re-primes requirements, and runs
