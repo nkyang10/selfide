@@ -72,3 +72,10 @@
   (no branch reset, worktrees kept); ship marked merged on skip.
 - Live test: seeded all-phases-done → all skip, rc=0, no agents/PRs. GitHub Actions hosting remains the
   documented next step (needs opencode+provider on the runner).
+
+## 30-cycle marathon launched (s002)
+- New epic #15 on cloud-pos-system: FULL cloud POS (12 targets incl. multi-station concurrency, realtime
+  sync push, QR/barcode scanners, voice AI assistant, HK-tax HTML export, coupons, auth, UX).
+- marathon mode built (`--max`, `--start`, `--min-gap`, TARGETS.md gate; designer maintains targets).
+- Detached (setsid) run pid 1171474; watching = epic #15 board + /tmp/opencode/marathon.log.
+- To note: each cycle ~8-12 model runs; 30 cycles ≈ many hours + significant model cost.
