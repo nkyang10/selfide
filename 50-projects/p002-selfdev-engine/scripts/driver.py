@@ -392,6 +392,7 @@ def cmd_run(a, cfg, dry, token):
         git(["fetch", "origin"], cwd=str(co))
     cur = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(co),
                          capture_output=True, text=True).stdout.strip()
+    git(["reset", "--hard", "HEAD"], cwd=str(co))        # drop any pending merge-conflict index before branching
     if not resuming or cur != branch:
         git(["checkout", "-B", branch, "origin/" + base], cwd=str(co))
     materialize_agents(cfg, co)
@@ -515,12 +516,23 @@ def cmd_run(a, cfg, dry, token):
                 else:
                     board(cfg, meta, f"**engine {rid}** ⚠/✗ Engineer task {i} {rec['status']} (exit {rec['exit']}) — skipped: {task[:60]}", dry=False, token=token)
                     log_run(cfg, rid, f"cycle{a.cycle}-engineer-t{i}", rec["status"])
-        ok_wts.sort(key=lambda t: t[0])          # deterministic merge order by task id
-        for i, task, wt, tb in ok_wts:
-            git(["merge", "--no-ff", "-m", f"engine {rid}: merge task {i}", tb], cwd=str(co))
-            git(["worktree", "remove", "--force", str(wt)], cwd=str(co))
-        if ok_wts:
-            git(["push", "origin", branch], cwd=str(co), token=token)
+    ok_wts.sort(key=lambda t: t[0])          # deterministic merge order by task id
+    for i, task, wt, tb in ok_wts:
+        try:
+            git(["merge", "--no-ff", "-m", f"engine {rid}: merge task {i}", tb], cwd=str(co), retries=1)
+        except subprocess.CalledProcessError:
+            # parallel tasks can touch overlapping files -> retry resolving in the task's favour
+            subprocess.run(["git", "merge", "--abort"], cwd=str(co), capture_output=True)
+            try:
+                git(["merge", "--no-ff", "-X", "theirs", "-m", f"engine {rid}: merge task {i} (theirs)", tb],
+                    cwd=str(co), retries=1, timeout=120)
+            except subprocess.CalledProcessError:
+                subprocess.run(["git", "merge", "--abort"], cwd=str(co), capture_output=True)
+                board(cfg, meta, f"**engine {rid}** ⚠ merge conflict on task {i} left out: {task[:60]}", dry=False, token=token)
+                continue
+        git(["worktree", "remove", "--force", str(wt)], cwd=str(co))
+    if ok_wts:
+        git(["push", "origin", branch], cwd=str(co), token=token)
         if research_proc is not None:
             _finr, _skipr = _phase("researcher")
             if not _skipr:
@@ -859,7 +871,7 @@ def build_parser():
     r = sub.add_parser("run", parents=[common]); r.add_argument("--run", required=True); r.add_argument("--cycle", type=int, default=1)
     m = sub.add_parser("report", parents=[common]); m.add_argument("--run", required=True); m.add_argument("--cycle", type=int, default=1)
     q = sub.add_parser("probe", parents=[common])
-    mar = sub.add_parser("marathon", parents=[common]); mar.add_argument("--run", required=True); mar.add_argument("--max", type=int, default=30); mar.add_argument("--start", type=int, default=1); mar.add_argument("--min-gap", type=int, default=60, help="seconds between cycles (provider backoff)")
+    mar = sub.add_parser("marathon", parents=[common]); mar.add_argument("--run", required=True); mar.add_argument("--max", type=int, default=30); mar.add_argument("--start", type=int, default=1); mar.add_argument("--min-gap", type=int, default=0, help="(legacy) seconds between cycles; phases already chain with no wait")
     y = sub.add_parser("cycle", parents=[common]); y.add_argument("--work", required=True); y.add_argument("--feature", required=True); y.add_argument("--run")
     return p
 
