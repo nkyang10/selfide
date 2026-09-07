@@ -56,3 +56,12 @@
   per_page comment fix. Verified compile + dry-run.
 - fields: two manual ship completions so far (transient/curl 500s); next cycle should self-ship via the
   curl fallback.
+
+## Durable-orchestration research (s002, user ask)
+- Findings: checkpointing ≠ durable execution (Diagrid); Temporal = reference for durable agents
+  (Approval pattern for human gates, fan-out for tasks); opencode already supports session export/import
+  → cheap agent-level resume; GitHub Actions as the free, kill-proof, scheduled durable runner (Copilot
+  cloud agent uses it); OpenHands SDK pause/resume + immutable event stream as state source.
+- Recommendation to adopt (small→medium): event-sourced `state.json` per run; step-level resume;
+  opencode session-resume on crash; then move the engine's execution into a nightly GitHub Actions
+  workflow; Temporal deferred.
