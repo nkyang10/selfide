@@ -19,8 +19,9 @@
 | FU-017 | 2026-09-07 s002 | **Close epic #12** on completion, or let cycle loops decide; suggest closing when user declares "requirement reached". | user | low | after FU-016 | open |
 | FU-013 | 2026-09-07 s002 | **Token permissions**: fine-grained PAT passed `probe` PARTIALLY — works: contents push, issue create, metadata. **Missing (403):** issue comments/edit/close (Issues R&W), pull requests create/merge (PRs R&W). Fix in GitHub → Developer settings → fine-grained PAT → repo permissions: **Issues: Read and write**, **Pull requests: Read and write** (Contents already R&W). Then re-probe. Also rotate token after testing (it's in chat history). | user | high | next session | open — probe FAIL list recorded |
 | FU-015 | 2026-09-07 s002 | **Playground cleanup**: close `cloud-pos-system` issues #1/#2 and delete `probe-base` branch (it became the tmp default until a real main exists) — possible after FU-013 perms. | engine | low | after FU-013 | open |
-| FU-018 | 2026-09-08 s003 | **Define the first source modification** in the p003 opencode fork (clone + build working; `opencode web` live on 127.0.0.1:4447 in `testing/`). | user/agent | high | next session | open — p003/README.md |
+| FU-018 | 2026-09-08 s003 | **Define the first source modification** in the p003 opencode fork (clone + build working; `opencode web` live on 127.0.0.1:4447 in `testing/`). | user/agent | high | next session | ✅ DONE (s004) — delivered as **FE-001** (login landing page + cookie auth) |
 | FU-019 | 2026-09-08 s003 | **Rotate the GitHub PAT** shared in chat during s003 (used to verify the fork). Create a fresh fine-grained PAT; drop the old one. | user | high | before next push | open — old token was deleted from disk already |
+| FU-020 | 2026-09-08 s004 | **Verify FE-001 from iOS**: open http://192.168.1.249:4447/ in Safari on the phone → login page → sign in (with/without "Save auth forever") → add to Home Screen and re-open → confirm session survives, then pick a permanent server password. | user | high | next session | open — FE-001 live on :4447 |
 
 ## Resolved
 

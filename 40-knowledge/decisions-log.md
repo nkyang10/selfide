@@ -118,3 +118,36 @@ Format:
   `opencode-linux-arm64`. **Update (same day):** GitHub fork exists at `nkyang10/opencode`; vendored
   clone remotes = `origin` (fork) + `upstream` (original). API fork failed — user created it via the
   GitHub app (fine-grained PAT lacked fork permission). Re-point pushes at origin; unshallow before first PR.
+
+### DEC-011 — FE-001: login landing page with cookie auth instead of the raw Basic prompt (2026-09-08)
+- **Decision:** When the server has a password configured, an unauthenticated **browser** request to any
+  path gets a served **login landing page** (401 HTML, `?next` preserved) instead of the browser's Basic
+  dialog. `POST /login` validates against `ServerAuth` and sets an `oc_creds` cookie (`base64(user:pass)`,
+  `HttpOnly; SameSite=Lax; Path=/`; `Max-Age=1y` when **remember-me** is ticked, session cookie otherwise);
+  both the UI router gate and the JSON API gate translate that cookie into Basic credentials. `GET /logout`
+  clears it. No password configured → behavior unchanged (open server).
+- **Rationale:** requested by user for iOS "Add to Home Screen" shortcuts: a server-set cookie persists in
+  WKWebView where app localStorage/headers can be unreliable; a real login page gives a typical
+  fail/retry/redirect-back flow. Cookie is passed automatically on every subrequest (SPA shell + SSE/API).
+- **Alternatives rejected:** client-side-only login (localStorage) — dies on iOS shortcut scope; keeping
+  the native Basic prompt — ugly, no remember-me, breaks redirect-back; token-in-URL (existing
+  `auth_token`) — leaks in logs/history.
+- **Consequences / revisit when:** `oc_creds` is base64 (not armored) — same trust as Basic on a LAN;
+  don't expose 0.0.0.0 outside a trusted network. Raw router routes got no request-time
+  `ServerAuth.Config` (Effect service-error) — resolved by resolving config in the router builder and
+  passing it into the handler. Re-check upstream merge conflict risk: `packages/server` and
+  `packages/opencode` auth files will conflict if upstream refactors auth (likely — it's experimental).
+
+### DEC-010 — Engine repo layer moves to a local Gitea (2026-09-08)
+- **Decision:** The p002 engine now targets a self-hosted **Gitea** (http://192.168.1.162:3300, gitea 1.27.3,
+  user `mark`). Repos migrated from GitHub by import: `mark/cloud-pos-system` (full git history; issues not
+  imported) and `mark/selfide`. Engine adapter: `ENGINE_GITEA=1` + `GITEA_TOKEN` (~/.gitea-engine-token) +
+  `ENGINE_GITEA_BASE` + `ENGINE_GIT_ROOT`; API differences handled (label name→id, PR head without owner
+  prefix, merge via POST `{"Do":"merge"}`, DELETE branches, base URL + token auth).
+- **Rationale:** GitHub `POST /pulls` was returning 500 (empty body) persistently on this account (inc-001);
+  a local Gitea removes that dependency and the network flakiness, and keeps PR/review semantics.
+- **Alternatives rejected:** continuing on GitHub (blocked); plain `direct_push` only (loses PR semantics
+  long-term); migrating to GHES self-host (heavier than Gitea).
+- **Consequences / revisit when:** engine runs double as remote GH (default) or Gitea (`ENGINE_GITEA=1`).
+  Git notes: `git <owner>` default config is currently GitHub; launch scripts set GITEA env. GitHub remote
+  repos remain authoritative for the ide control center; Gitea selfide is a second mirror.

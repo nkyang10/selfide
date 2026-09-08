@@ -59,5 +59,13 @@
 | 2026-09-08 | s003 | p003 | restart opencode web with `--hostname 0.0.0.0` (port 4447, testing/) | 0 | LAN-reachable: http://192.168.1.249:4447/ = 200; pid 1445769; run-web.sh updated |
 | 2026-09-08 | s003 | github | fork anomalyco/opencode → nkyang10/opencode (via app, token API lacked perms; token in /tmp/opencode/gh_token, deleted after) | 0 | fork public, fork=true; PAT needs rotation (FU-019) |
 | 2026-09-08 | s003 | p003 | git remote rename origin upstream; git remote add origin https://github.com/nkyang10/opencode.git; git fetch origin | 0 | vendored clone now tracks our fork (origin) + upstream original; still shallow @ecbc6cc |
+| 2026-09-08 | s004 | p003 | FE-001 impl: login.ts (new) + auth middleware + server.ts routes + shared cookie helpers | 0 | login page serves; cookie → Basic bridging on web+API gates |
+| 2026-09-08 | s004 | p003 | bun run --cwd packages/server typecheck; --cwd opencode typecheck | 0 | clean |
+| 2026-09-08 | s004 | p003 | bun ./packages/opencode/script/build.ts --single --skip-install (x3) | 0 | armed: 0.0.0-dev-202609080057; smoke test passed |
+| 2026-09-08 | s004 | p003 | restart: OPENCODE_SERVER_PASSWORD=hahahaha …/opencode web --port 4447 --hostname 0.0.0.0 | 0 | login active; pid 1490948 |
+| 2026-09-08 | s004 | p003 | curl verification suite (7 auth scenarios + no-password regression on :4448) | 0 | all pass — see session s004 table |
+| 2026-09-08 | s004 | p003 | restyle login page to @opencode-ai/ui v2 tokens (light: #fafafa bg, blue #3b5cf6 accent, Inter/JetBrainsMono) + rebuild | 0 | now matches app design system; re-run curl group passes (401 page, 200 w/ cookie) |
 | 2026-09-07 | s002 | p002 | Autopsy of marathon ship failures (user: search errors + add logs): added verbose ghapi logging (every attempt, body snippet, curl rc/stderr) | 0 | pinned: POST /pulls -> 500 empty body on BOTH repos, BOTH clients, fresh limits — account-level GitHub issue |
 | 2026-09-07 | s002 | p002 | Implement `gates.ship: direct_push` (git push branch->main, keeps branch for later PR) as workaround; incident inc-001 | 0 | product accumulation guaranteed independent of /pulls |
+| 2026-09-08 | s002 | gitea | Migrated cloud-pos-system + selfide to local Gitea (http://192.168.1.162:3300) via /repos/migrate (history+tree; issues not imported); repos renamed to mark/cloud-pos-system, mark/selfide; engine token created (chmod600 ~/.gitea-engine-token) | 0 | local Gitea authoritative for p002 |
+| 2026-09-08 | s002 | gitea | engine adapter: Gitea base+token auth, label name→id, PR head without owner, POST merge Do:"merge", branch delete; config target mark/cloud-pos-system; engine-env-gitea.sh | 0 | client verified E2E on Gitea (issue→PR→merge→delete) |

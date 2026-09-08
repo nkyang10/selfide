@@ -7,6 +7,9 @@ if you want human gates.
 ## Prerequisites (once)
 
 1. `pip install` nothing; stdlib only (Python 3.12+, `git`).
+   - Local Gitea (default for the
+     playground): `source 50-projects/p002-selfdev-engine/scripts/engine-env-gitea.sh` and use
+     `--repo mark/cloud-pos-system`. GitHub (fallback): export `GITHUB_TOKEN` instead.
 2. Set the token in the environment (never in files): `export GITHUB_TOKEN=...`
    (must have repo write scopes). For public playgrounds keep it minimal.
 3. Point the engine at the target repo:

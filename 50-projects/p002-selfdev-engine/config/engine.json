@@ -1,5 +1,5 @@
 {
-  "target_repo": "nkyang10/cloud-pos-system",
+  "target_repo": "mark/cloud-pos-system",
   "opencode_bin": "/home/mark/.opencode/bin/opencode",
   "workdir": "/tmp/opencode/engine-work",
   "state_dir": "ENGINE_STATE",

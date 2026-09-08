@@ -3,7 +3,14 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
-- **Last updated:** 2026-09-08 (UTC) — session **s003: p003 fork project up**. Created `50-projects/p003-opencode-fork/` and **vendored the opencode source** (shallow clone `dev`@`ecbc6cc`, git-ignored) to modify it. Installed **Bun 1.4.2** (`~/.bun`) and **built our own binary**: `p003/opencode/packages/opencode/dist/opencode-linux-arm64/bin/opencode` (host is **aarch64**; smoketest `0.0.0-dev-202609072334`). `opencode web` is **running** on **http://0.0.0.0:4447/** (cwd `p003/testing/`, **network-accessible** on LAN at http://192.168.1.249:4447/, no auth, pid 1445769). **GitHub fork created:** `nkyang10/opencode` (of anomalyco/opencode); vendored clone remotes = `origin`→fork, `upstream`→original. PAT from session to be rotated (FU-019). First source modification pending (FU-018). Gotcha recorded: login shell exports `OPENCODE_SERVER_PASSWORD` → 401 unless started with `env -u`. Repeatable via `p003/scripts/build-linux.sh` + `run-web.sh`. First source modification pending (FU-018).
+- **Last updated:** 2026-09-08 (UTC) — session **s004: FE-001 done**. First p003 source modification is
+  **live**: a login **landing page** + cookie auth replaces the raw Basic prompt when a server password is
+  set. Serves at http://192.168.1.249:4447/ (cwd `p003/testing/`, `web` pid 1490948); wrong creds → error
+  banner; **Remember-me** → `oc_creds` cookie `Max-Age=1y` (session cookie otherwise), HttpOnly+SaneLax,
+  survives iOS *Add to Home Screen*; redirects back to the original path; `/logout` clears. Both UI and
+  API gates accept the cookie. Regression: no password set → open server, unchanged. Git: fork
+  `nkyang10/opencode` wired (`origin`=fork, `upstream`=original; unshallow before first PR). FU-020 (iOS
+  verify + pick permanent password) + FU-019 (rotate PAT) pending. Gotcha recorded: login shell exports `OPENCODE_SERVER_PASSWORD` → 401 unless started with `env -u`. Repeatable via `p003/scripts/build-linux.sh` + `run-web.sh`. First source modification pending (FU-018).
 
 ## Product vision
 

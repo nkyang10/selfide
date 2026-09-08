@@ -9,11 +9,25 @@ import urllib.error
 import urllib.request
 
 API = "https://api.github.com"
-
 RETRY_SLEEP = 4
 
 
+def _is_gitea():
+    return os.environ.get("ENGINE_GITEA") == "1"
+
+
+def _api_base():
+    if _is_gitea():
+        return os.environ.get("ENGINE_GITEA_BASE", "http://192.168.1.162:3300") + "/api/v1"
+    return API
+
+
 def _headers():
+    if _is_gitea():
+        tok = os.environ.get("GITEA_TOKEN")
+        return {"Authorization": "token " + (tok or ""),
+                "Content-Type": "application/json", "Accept": "application/json",
+                "X-Gitea-Version": ""}
     h = {"X-GitHub-Api-Version": "2022-11-28",
          "Accept": "application/vnd.github+json",
          "Content-Type": "application/json"}
@@ -28,7 +42,7 @@ def _log(msg):
 
 
 def request(method, path, data=None, retries=4):
-    url = path if path.startswith("http") else API + path
+    url = _api_base() + path if not path.startswith("http") else path
     body = json.dumps(data).encode() if data is not None else None
     for attempt in range(retries + 1):
         try:
@@ -57,16 +71,21 @@ def request(method, path, data=None, retries=4):
 
 
 def _curl_retry(method, url, data):
-    """curl fallback for GitHub endpoints that intermittently 500 depending on the client's request shape."""
+    """curl fallback for API endpoints that intermittently 500 depending on the client's request shape."""
     import subprocess
-    tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    cmd = ["curl", "-s", "-X", method, "-H", f"Authorization: Bearer {tok}",
-           "-H", "Accept: application/vnd.github+json", "-H", "Content-Type: application/json",
-           "-H", "X-GitHub-Api-Version: 2022-11-28"]
-    if data is not None:
-        cmd += ["-d", json.dumps(data)]
-    cmd += ["-w", "\n__HTTP__%{http_code}", url]
     try:
+        if _is_gitea():
+            tok = os.environ.get("GITEA_TOKEN") or ""
+            cmd = ["curl", "-s", "-X", method, "-H", f"Authorization: token {tok}",
+                   "-H", "Accept: application/json", "-H", "Content-Type: application/json"]
+        else:
+            tok = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+            cmd = ["curl", "-s", "-X", method, "-H", f"Authorization: Bearer {tok}",
+                   "-H", "Accept: application/vnd.github+json", "-H", "Content-Type: application/json",
+                   "-H", "X-GitHub-Api-Version: 2022-11-28"]
+        if data is not None:
+            cmd += ["-d", json.dumps(data)]
+        cmd += ["-w", "\n__HTTP__%{http_code}", url]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     except Exception as e:
         raise RuntimeError(f"curl spawn failed: {e}")
@@ -86,8 +105,22 @@ def default_branch(repo):
 
 
 def create_issue(repo, title, body, labels=None):
-    d = {"title": title, "body": body, "labels": labels or []}
+    d = {"title": title, "body": body, "labels": []}
+    if labels:
+        if _is_gitea():
+            d["labels"] = _label_ids(repo, labels)     # Gitea wants [{"id": int}] not names
+        else:
+            d["labels"] = labels
     return request("POST", f"/repos/{repo}/issues", d)[1]
+
+
+def _label_ids(repo, names):
+    ensure_labels(repo, names)
+    try:
+        all_l = request("GET", f"/repos/{repo}/labels")[1]
+    except RuntimeError:
+        return []
+    return [l["id"] for l in all_l if l.get("name") in names]
 
 
 def add_issue_comment(repo, issue_no, body):
@@ -111,6 +144,8 @@ def list_branches(repo):
 
 def create_pr(repo, title, head, base, body):
     d = {"title": title, "head": head, "base": base, "body": body}
+    if _is_gitea():
+        d["head"] = head.split(":", 1)[-1]     # Gitea wants the bare branch name; owner prefix 404s
     return request("POST", f"/repos/{repo}/pulls", d)[1]
 
 
@@ -123,7 +158,27 @@ def close_issue(repo, issue_no):
 
 
 def delete_branch(repo, branch):
+    if _is_gitea():
+        return request("DELETE", f"/repos/{repo}/branches/{branch}")[0]
     return request("DELETE", f"/repos/{repo}/git/refs/heads/{branch}")[0]
+
+
+def ensure_labels(repo, names):
+    """Gitea needs labels pre-created (GitHub auto-creates on first use with a label name)."""
+    if not _is_gitea():
+        return
+    try:
+        existing = [l["name"] for l in request("GET", f"/repos/{repo}/labels")[1]]
+    except RuntimeError:
+        return
+    for name in names:
+        if name in existing:
+            continue
+        try:
+            request("POST", f"/repos/{repo}/labels", {"name": name, "color": "A03623"})
+            _log(f"created label {name}")
+        except RuntimeError as e:
+            _log(f"label {name} create failed: {e}")
 
 
 def get_pulls(repo, state="open", head=None):
@@ -134,6 +189,8 @@ def get_pulls(repo, state="open", head=None):
 
 
 def merge_pr(repo, pr_no, method="merge"):
+    if _is_gitea():
+        return request("POST", f"/repos/{repo}/pulls/{pr_no}/merge", {"Do": method or "merge"})[1]
     return request("PUT", f"/repos/{repo}/pulls/{pr_no}/merge", {"merge_method": method})[1]
 
 

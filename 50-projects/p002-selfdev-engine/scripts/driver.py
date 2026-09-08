@@ -85,13 +85,24 @@ def checkout_path(cfg, repo):
     name = repo.split("/")[-1]
     return Path(cfg["workdir"]) / name
 
+def _git_url(repo):
+    """Repo clone/push URL for git operations — GitHub by default, or a local Gitea root via env."""
+    root = os.environ.get("ENGINE_GIT_ROOT")
+    return f"{root}/{repo}.git" if root else f"https://github.com/{repo}.git"
+
+
+def proxy_note():
+    if os.environ.get("ENGINE_GITEA") == "1":
+        print("· repo layer: GITEA", flush=True)
+
 
 def git(args, cwd=None, dry=False, token=None, retries=3, timeout=200):
     env = os.environ.copy()
     if token:
         b64 = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+        base = (os.environ.get("ENGINE_GIT_ROOT") or "https://github.com").rstrip("/")
         env["GIT_CONFIG_COUNT"] = "1"
-        env["GIT_CONFIG_KEY_0"] = "http.https://github.com/.extraHeader"
+        env["GIT_CONFIG_KEY_0"] = f"http.{base}/.extraHeader"
         env["GIT_CONFIG_VALUE_0"] = f"Authorization: Basic {b64}"
     cmd = ["git", *args]
     if dry:
@@ -387,7 +398,7 @@ def cmd_run(a, cfg, dry, token):
         except RuntimeError:
             pass
     if not (co / ".git").exists():
-        git(["clone", f"https://github.com/{repo}.git", str(co)], token=token)
+        git(["clone", _git_url(repo), str(co)], token=token)
     else:
         git(["fetch", "origin"], cwd=str(co))
     cur = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(co),
@@ -750,6 +761,7 @@ def proposal_issues(meta, co, rd, cyc):
     out = []
     if not nxt.exists():
         return out
+    gh.ensure_labels(meta["repo"], ["engine/proposal", "enhancement"])
     for line in nxt.read_text().splitlines():
         l = line.strip()
         if not l.startswith("- "):
@@ -870,7 +882,7 @@ def cmd_probe(a, cfg, dry, token):
         tmp = Path(cfg["workdir"]) / tag.replace("/", "_")
         tmp.mkdir(parents=True, exist_ok=True)
         pb = f"pbase-{ts}"
-        git(["clone", "--depth", "1", f"https://github.com/{repo}.git", str(tmp / "c")], dry=dry)
+        git(["clone", "--depth", "1", _git_url(repo), str(tmp / "c")], dry=dry)
         if not dry:
             git(["checkout", "-b", pb, "origin/" + base], cwd=str(tmp / "c"))
             (tmp / "c" / "probe.txt").write_text(f"engine permission probe {ts}\n")
@@ -909,8 +921,9 @@ def build_parser():
 def main():
     args = build_parser().parse_args()
     cfg = load_config()
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if args.cmd in ("handoff", "clarify", "run", "report", "cycle") and not args.dry_run and not token:
+    proxy_note()
+    token = os.environ.get("GITEA_TOKEN") if os.environ.get("ENGINE_GITEA") == "1" else (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"))
+    if args.cmd in ("handoff", "clarify", "run", "report", "cycle", "marathon") and not args.dry_run and not token:
         sys.exit("GITHUB_TOKEN not set in environment (required for network ops; set it, don't store it).")
     handlers = {"handoff": cmd_handoff, "clarify": cmd_clarify, "run": cmd_run, "report": cmd_report, "cycle": cmd_cycle, "probe": cmd_probe, "marathon": cmd_marathon}
     handlers[args.cmd](args, cfg, args.dry_run, token)
