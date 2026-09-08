@@ -401,6 +401,7 @@ def cmd_run(a, cfg, dry, token):
         git(["clone", _git_url(repo), str(co)], token=token)
     else:
         git(["fetch", "origin"], cwd=str(co))
+    git(["remote", "set-url", "origin", _git_url(repo)], cwd=str(co), dry=dry)   # pin the active repo layer (Gitea/GitHub)
     cur = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(co),
                          capture_output=True, text=True).stdout.strip()
     git(["reset", "--hard", "HEAD"], cwd=str(co))        # drop any pending merge-conflict index before branching
