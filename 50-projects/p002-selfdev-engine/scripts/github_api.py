@@ -23,6 +23,10 @@ def _headers():
     return h
 
 
+def _log(msg):
+    print(f"[ghapi] {msg}", flush=True)
+
+
 def request(method, path, data=None, retries=4):
     url = path if path.startswith("http") else API + path
     body = json.dumps(data).encode() if data is not None else None
@@ -31,17 +35,24 @@ def request(method, path, data=None, retries=4):
             req = urllib.request.Request(url, data=body, headers=_headers(), method=method)
             with urllib.request.urlopen(req, timeout=45) as r:
                 raw = r.read()
+                _log(f"{method} {path} OK {r.status} (attempt {attempt + 1})")
                 return r.status, (json.loads(raw) if raw else None)
         except urllib.error.HTTPError as e:
             snippet = e.read().decode(errors="replace")[:400]
+            _log(f"{method} {path} HTTP {e.code} attempt {attempt + 1}/{retries + 1} body={snippet.strip()!r}")
             if e.code >= 500 and attempt < retries:      # GitHub flaps: back off exponential to ~2 min total
-                time.sleep(RETRY_SLEEP * (2 ** attempt))
+                wait = RETRY_SLEEP * (2 ** attempt)
+                _log(f"{method} {path} retrying in {wait}s")
+                time.sleep(wait)
                 continue
             if e.code >= 500 and method in ("POST", "PATCH", "PUT"):
+                _log(f"{method} {path} trying curl fallback")
                 try:
-                    return _curl_retry(method, url, data)
-                except RuntimeError:
-                    pass
+                    r2 = _curl_retry(method, url, data)
+                    _log(f"{method} {path} curl fallback OK {r2[0]}")
+                    return r2
+                except RuntimeError as ce:
+                    _log(f"{method} {path} curl fallback FAILED: {ce}")
             raise RuntimeError(f"github {method} {path} -> {e.code}: {snippet}")
 
 
@@ -55,12 +66,16 @@ def _curl_retry(method, url, data):
     if data is not None:
         cmd += ["-d", json.dumps(data)]
     cmd += ["-w", "\n__HTTP__%{http_code}", url]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except Exception as e:
+        raise RuntimeError(f"curl spawn failed: {e}")
     code = 0
     body = r.stdout
     if "__HTTP__" in r.stdout:
         body, _, code_s = r.stdout.rpartition("__HTTP__")
         code = int(code_s.strip()) if code_s.strip().isdigit() else 0
+    _log(f"curl {method} -> rc={r.returncode} http={code} body={body[:80]!r} stderr={r.stderr.strip()[:120]!r}")
     if 200 <= code < 300:
         return code, (json.loads(body) if body.strip() else None)
     raise RuntimeError(f"github {method} {url} -> {code}: {body[:400]}")

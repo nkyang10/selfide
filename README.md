@@ -31,7 +31,7 @@ USER (Mark)         AGENT (controller)                      ENVIRONMENT
 | `20-logs/` | Logging system: policy, append-only command log, per-session records, incidents. |
 | `30-runbooks/` | Step-by-step procedures for recurring operations (dev loop, deploy, rollback). |
 | `40-knowledge/` | Reference material: **research** (agentic-web-ui, opencode server API) + `decisions-log.md` (every implementation decision and why). |
-| `50-projects/` | **Per-implementation projects.** `p001-opencode-web-ui` (active — the web UI), `p002-selfdev-engine` (active design — multi-agent self\* dev engine), `p000-TEMPLATE` (blank scaffold). |
+| `50-projects/` | **Per-implementation projects.** `p001-opencode-web-ui` (active — the web UI), `p002-selfdev-engine` (active design — multi-agent self\* dev engine), `p003-opencode-fork` (active — vendored opencode source, own Linux build + future patches), `p000-TEMPLATE` (blank scaffold). |
 | `90-archive/` | Rotated logs and superseded docs. Never delete history — move it here. |
 | `scripts/` | Project operation tools (dev/deploy/rollback helpers — populated as the project grows). |
 | `.opencode/` | Agent skills for this workspace (e.g. `web-research`). |

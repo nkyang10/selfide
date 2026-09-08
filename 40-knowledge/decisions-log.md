@@ -102,3 +102,19 @@ Format:
 - **Alternatives rejected:** treating those as environment noise (they're reproducible: repro showed
   relative-dir fails 6/6 when python-exec'd); dot-nested task branch names.
 - **Consequences:** next cycle should self-complete the ship phase without manual help.
+
+### DEC-010 — p003: opencode fork project, vendored clone + own Linux build (2026-09-08)
+- **Decision:** New active project `50-projects/p003-opencode-fork`: the **upstream opencode source is
+  vendored** as a git-ignored nested clone at `p003/opencode/`, we build our own binary on this machine
+  (Bun 1.4.2 in `~/.bun`; `scripts/build-linux.sh`), and every future modification to opencode itself is
+  developed here, then optionally upstreamed as a PR. The cloned repo is **not** tracked by the ide repo.
+- **Rationale:** the mbot end-goal (p001/p002) will eventually need changes inside opencode (server API,
+  auth, SSE, permissions). Having a validated from-source build (aarch64) makes patches cheap to test
+  locally instead of waiting for upstream releases.
+- **Alternatives rejected:** relying on prebuilt opencode binaries only (cannot carry local patches);
+  `git submodule` (nested plain clone is simpler; history is upstream-owned).
+- **Consequences / revisit when:** keep the clone shallow (`--depth 1`); re-run `build-linux.sh` after
+  pulling upstream. Watch upstream rename/`dev`-branch instability. Build host is aarch64 → binary is
+  `opencode-linux-arm64`. **Update (same day):** GitHub fork exists at `nkyang10/opencode`; vendored
+  clone remotes = `origin` (fork) + `upstream` (original). API fork failed — user created it via the
+  GitHub app (fine-grained PAT lacked fork permission). Re-point pushes at origin; unshallow before first PR.

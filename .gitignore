@@ -23,5 +23,8 @@ coverage/
 # p002 engine generated state (keep LESSONS.md/README tracked; ignore runs)
 50-projects/p002-selfdev-engine/ENGINE_STATE/runs/
 
+# p003 vendored opencode clone (nested repo — keep it out of the ide repo)
+50-projects/p003-opencode-fork/opencode/
+
 # Logs that are not session/command records
 *.log

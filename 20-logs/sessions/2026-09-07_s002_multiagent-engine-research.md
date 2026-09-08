@@ -79,3 +79,12 @@
 - marathon mode built (`--max`, `--start`, `--min-gap`, TARGETS.md gate; designer maintains targets).
 - Detached (setsid) run pid 1171474; watching = epic #15 board + /tmp/opencode/marathon.log.
 - To note: each cycle ~8-12 model runs; 30 cycles ≈ many hours + significant model cost.
+
+## Marathon relaunches + /pulls 500 flap (s002)
+- First marathon attempt stalled: cycles built code but create_pr repeatedly 500 (GitHub flap); manual
+  curl + _curl_retry both succeed when GitHub healthy -> confirmed GitHub-side intermittent /pulls 500.
+- Also found+fixed parallel-engineer merge-conflict crash (reset index before checkout; -X theirs fallback;
+  file-disjoint task scoping) -> the earlier abort.
+- Relaunched marathon (pid 1404587) from cycle 1 with: retries/backoff, curl fallback, ship-only resume
+  retry (6x, 90s cooldown), zero-gap chaining. Cycles 1-3 content from earlier attempts was NOT merged
+  (lost from main) — re-run rebuilds it.

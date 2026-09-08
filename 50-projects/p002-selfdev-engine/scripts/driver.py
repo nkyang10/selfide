@@ -51,7 +51,7 @@ def load_config():
         "roles": ["assembler", "engineer", "qa", "reviewer", "researcher", "designer", "retro"],
         "engineer": {"max_parallel": 2},
         "researcher": {"on": True},
-        "gates": {"plan": "auto", "review": "auto_merge", "qa_iterations": 3, "review_rounds": 2},
+        "gates": {"plan": "auto", "review": "auto_merge", "ship": "pr", "qa_iterations": 3, "review_rounds": 2},
         "require_mgmt": {"interview": True, "max_question_rounds": 2},
     }
     cfg = PROJECT / "config" / "engine.json"
@@ -250,7 +250,7 @@ def cmd_handoff(a, cfg, dry, token):
     rid = a.run or run_id()
     rd = run_dir(cfg, rid)
     rd.mkdir(parents=True, exist_ok=True)
-    targets = [t.strip() for t in (a.targets or "").split("|") if t.strip()]
+    targets = [t.strip() for t in (getattr(a, "targets", "") or "").split("|") if t.strip()]
     meta = {
         "run_id": rid, "repo": a.repo or cfg["target_repo"], "feature": a.feature,
         "work": a.work, "issue": None, "cycle": 0, "good": False, "targets": targets,
@@ -398,7 +398,7 @@ def cmd_run(a, cfg, dry, token):
     materialize_agents(cfg, co)
     seed_targets(meta, co)
     _git_commit_if_dirty(co, f"engine {rid}: bootstrap agents + plan")   # cycle 2+ already has these on main
-    git(["push", "-u", "origin", branch], cwd=str(co), token=token)
+    git(["push", "-f", "-u", "origin", branch], cwd=str(co), token=token)   # engine branch is disposable; force keeps restart/resume simple
     if not resuming:
         board(cfg, meta, f"**engine {rid}** cycle {a.cycle} kickoff — branch `{branch}` created; plan + role agents in place.", dry=False, token=token)
 
@@ -630,10 +630,21 @@ def cmd_run(a, cfg, dry, token):
         nums = json.loads(prq.read_text())
         if nums:
             proposals_ref = "\nrelated proposals: " + ", ".join(f"#{n}" for n in nums)
+    ship_mode = cfg["gates"].get("ship", "pr")
     _fin, _skip = _phase("ship")
     if _skip:
         merged = True                      # already merged in a prior (crashed) attempt
         pr = {"number": "?"}
+    elif ship_mode == "direct_push":
+        # bypass the (currently broken) GitHub /pulls REST API: push the engine branch onto main directly.
+        # audit trail still lands on the board; PRs can be recreated from the branch later if wanted.
+        git(["push", "origin", f"{branch}:{base}", "--force-with-lease"], cwd=str(co), token=token, retries=4)
+        merged = True
+        pr = {"number": "direct-push"}
+        board(cfg, meta, f"**engine {rid}** ⚠ direct-push shipped to `{base}` (PR API unavailable); branch `{branch}` kept for later PR.", dry=False, token=token)
+        _fin(merged, "direct-push")
+        meta["status"] = f"cycle{a.cycle}-merged"
+        write_meta(cfg, rid, meta)
     else:
         time.sleep(4)                                           # let the freshly-pushed ref index before create_pr (avoids GH 500s)
         pr = gh.create_pr(repo, f"[engine/{rid}] {meta['feature']} (cycle {a.cycle})",
