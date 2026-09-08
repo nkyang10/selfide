@@ -56,3 +56,20 @@
 - https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent · https://github.blog/ai-and-ml/github-copilot/github-copilot-coding-agent-101-getting-started-with-agentic-workflows-on-github/
 - https://www.truefoundry.com/blog/multi-agent-orchestration-frameworks (2026 survey)
 - https://zylos.ai/research/2026-02-17-durable-execution-ai-agents/ (trade-offs)
+
+## Addendum — GitHub POST /pulls 500 (empty body) — internet findings (2026-09-07)
+- **Exact-match community thread:** https://github.com/orgs/community/discussions/146178 — same symptom
+  ("creating a new pull request → HTTP 500"); GitHub staff attributed it to a **status incident
+  affecting "both Pull Requests and API Requests"** (https://www.githubstatus.com/incidents/w6g0cmvyx3vm),
+  resolved later the same day.
+- **Recent PR-related incidents:** 2026-08-26 "Incident with Actions and Pull Requests"; 2026-09-01
+  "Delays in commit processing"; 2026-09-04 "Degradation in repos contents API" (githubstatus.com).
+- **Status page right now:** no unresolved incidents, yet `/pulls` still 500s (urllib + curl, both repos,
+  fresh rate limits). → failure outlives the public incidents: likely an **account/token-scoped soft-throttle**
+  from today's heavy automated use (community guidance: GitHub may block accounts for "suspicious behavior,
+  excessive repository creation, spamming, or using bots").
+- **Repo settings ruled out:** `has_pull_requests=true`, `pull_request_creation_policy=all` on both repos.
+- **Recommended paths:** (1) manual web-UI PR test to distinguish account-level vs API-only throttle;
+  (2) drop the API load on this token (fewer issues/comments/PR attempts per hour) and/or rotate to a fresh
+  token; (3) keep `direct_push` until /pulls recovers; (4) optional: try GraphQL createPullRequest (different
+  code path).

@@ -13,3 +13,8 @@
 - **Workaround:** new `gates.ship: direct_push` — engine pushes branch→main directly (git push), board
   notes it, keeps the branch for a later PR. Guarantees product accumulation on the playground.
 - **Reopen when:** /pulls starts returning 201 again (revert to `pr` mode for real repos).
+
+## Internet research follow-up (2026-09-07)
+- Symptom matches GH community thread #146178; GitHub attribute: PR+API status incident, later resolved.
+- No unresolved status incident now, yet failure persists -> account/token-scoped soft-throttle suspected.
+- Repo settings all-clear. See 40-knowledge addendum for sources + next steps.
