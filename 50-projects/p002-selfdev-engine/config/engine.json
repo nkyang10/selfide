@@ -10,9 +10,14 @@
     "qa",
     "reviewer",
     "researcher",
+    "librarian",
     "designer",
     "retro"
   ],
+  "librarian": {
+    "on": true,
+    "timeout_secs": 2400
+  },
   "gates": {
     "plan": "auto",
     "review": "auto_merge",

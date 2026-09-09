@@ -51,9 +51,10 @@ def load_config():
         "workdir": "/tmp/opencode/engine-work",
         "state_dir": "ENGINE_STATE",
         "model": "",
-        "roles": ["assembler", "engineer", "qa", "reviewer", "researcher", "designer", "retro"],
+        "roles": ["assembler", "engineer", "qa", "reviewer", "researcher", "librarian", "designer", "retro"],
         "engineer": {"max_parallel": 1, "timeout_secs": 7200, "cycle_time_secs": 43200},
         "researcher": {"on": True, "timeout_secs": 7200},
+        "librarian": {"on": True, "timeout_secs": 2400},
         "assembler": {"timeout_secs": 3000},
         "gates": {"plan": "auto", "review": "auto_merge", "ship": "pr", "qa_iterations": 3, "review_rounds": 2},
         "require_mgmt": {"interview": True, "max_question_rounds": 2},
@@ -294,6 +295,7 @@ AGENT_FRONTMATTER = {
     "qa": "mode: all\npermission:\n" + PERMS_FULL,
     "reviewer": "mode: all\npermission:\n" + PERMS_GIT,
     "researcher": "mode: all\npermission:\n" + PERMS_FULL,
+    "librarian": "mode: all\npermission:\n  read: allow\n  glob: allow\n  grep: allow\n  write: allow\n  edit: allow\n  bash: allow",
     "designer": "mode: all\npermission:\n" + PERMS_GIT,
     "retro": "mode: all\npermission:\n  read: allow\n  glob: allow\n  grep: allow\n  write: allow\n  edit: allow",
 }
@@ -619,6 +621,40 @@ def cmd_run(a, cfg, dry, token):
                 board(cfg, meta, f"**engine {rid}** Researcher findings:\n\n" + findings.read_text()[:2000], dry=dry, token=token)
             elif cfg.get("researcher", {}).get("on", True):
                 board(cfg, meta, f"**engine {rid}** Researcher produced no findings this cycle.", dry=dry, token=token)
+
+        # — LIBRARIAN (main cycles only): folds the research findings into the repo's KNOWLEDGE/ wiki
+        #   (pagewise, product-grouped pages + index.md). Advisory like research — a librarian failure is
+        #   noted, never fatal. It commits its delta in the repo worktree; the driver merges/pushes it. —
+        if not sub_cycle and cfg.get("librarian", {}).get("on", True):
+            lib_findings = co / "ENGINE_STATE" / "RESEARCH" / f"{rid}.md"
+            _finl, _skipl = _phase("librarian")
+            if not _skipl:
+                lib_msg = (
+                    f"Curate this run's research into the repo KNOWLEDGE/ wiki.\n\n"
+                    f"1. Prune first: the engine already persisted findings to "
+                    f"`ENGINE_STATE/RESEARCH/{rid}.md`. If that file does NOT exist (or is empty), "
+                    f"make NO changes and do NOT commit — reply that there is nothing to curate.\n"
+                    f"2. Else read it plus the existing `KNOWLEDGE/` tree + `KNOWLEDGE/index.md`, then fold "
+                    f"the findings into pagewise, product-grouped pages per your brief. Rebuild "
+                    f"`KNOWLEDGE/index.md` (products table + `Latest updates` line).\n"
+                    f"3. Commit with message: `docs(knowledge): fold findings from run {rid} (cycle {cyc})`.\n"
+                )
+                lib_ok = run_agent(cfg, "librarian", lib_msg, co,
+                                   timeout=max(600, cfg.get("librarian", {}).get("timeout_secs", 2400)),
+                                   logfile=rd / f"agent-librarian-{a.cycle}.log")
+                # the librarian only touches KNOWLEDGE/**, so a dirty tree means a wiki delta
+                lib_dirty = subprocess.run(["git", "status", "--porcelain", "--", "KNOWLEDGE"],
+                                           cwd=str(co), capture_output=True, text=True).stdout.strip()
+                lib_commit = bool(lib_dirty)
+                if lib_dirty:
+                    _git_commit_if_dirty(co, f"docs(knowledge): fold findings from run {rid} (cycle {cyc})")
+                _finl(lib_ok and lib_commit, "wiki updated" if lib_commit else "no change")
+                if lib_dirty:
+                    git(["push", "origin", branch], cwd=str(co), token=token)
+                    board(cfg, meta, f"**engine {rid}** Librarian folded findings → `KNOWLEDGE/` "
+                                     f"(commit on `{branch}`).", dry=dry, token=token)
+                elif not lib_ok:
+                    log_run(cfg, rid, f"cycle{cyc}-librarian", "FAILED (non-fatal, no commit)")
 
         # — ENGINEERS: exactly ONE agent at a time. Each task gets its full budget; what it finishes is
         #   merged + pushed immediately; what it does NOT finish within the budget is recorded "half" and
