@@ -48,3 +48,16 @@
 
 - FU-018 (first modification) → **closed** — delivered as FE-001.
 - FU-020: user verifies login page from iOS (shortcut/Add-to-Home-Screen) and iterates on UX/password.
+
+## FE-002 addendum (same session) — project-selector crash fix
+
+- User reported the project selector (button next to the branch `dev`) "does nothing".
+- Console showed `GET /find/file?...500` + `GET /file?path=...500`.
+- Root cause: **pre-existing dev-branch file-search defect** — `FileHttpApi.list`/`findFile` build a
+  per-location Effect layer at request time via `LocationServiceMap.Service.get(Location.Ref.make(...))`;
+  the layer compile throws `TypeError: undefined is not an object (evaluating 'a.name')` → 500.
+  Proof: stock stable build on :4445 serves the same endpoints fine; my changes are auth-only.
+- Fix (FE-002, `handlers/file.ts`): `Effect.catchCause` guards on `list`+`findFile`; `list` falls back
+  to a plain FSUtil listing. Typecheck + rebuild clean. Verified: `/file` and `/find/file` return 200
+  with real entries; auth + SPA + login page all still pass.
+- DEC-012 records the decision. FU-021: user re-test the selector + iOS flow.

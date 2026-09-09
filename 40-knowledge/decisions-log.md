@@ -138,6 +138,21 @@ Format:
   passing it into the handler. Re-check upstream merge conflict risk: `packages/server` and
   `packages/opencode` auth files will conflict if upstream refactors auth (likely — it's experimental).
 
+### DEC-012 — FE-002: guard the dev-branch file-search 500 so the project picker works (2026-09-08)
+- **Decision:** `FileHttpApi.list` + `.findFile` (the endpoints the project selector needs) 500 with a
+  layer-compile defect (`TypeError: undefined is not an object (evaluating 'a.name')`) on this dev-branch
+  build — **pre-existing, unrelated to our auth changes** (stock stable build serves them fine). Rather
+  than fix Effect's `LayerNode` compiler internals (deep/risky), wrap both handlers with
+  `Effect.catchCause` and make `list` fall back to a **plain FSUtil listing** (real dir entries,
+  no gitignore filtering) when the per-location layer fails to build.
+- **Rationale:** restores the project selector ("button next to (dev)") end-to-end while keeping the
+  change small and isolated to one handler file. The location layer `LocationServiceMap.Service.get(ref)`
+  at request time is the fragile part in this snapshot.
+- **Alternatives rejected:** patching `layer-node.ts` compile internals (high regression risk); returning
+  hard empty arrays (selector opened but directory browsing dead).
+- **Consequences / revisit when:** fallback listing ignores gitignore and sorts plainly — acceptable on a
+  personal server. If upstream fixes the layer compile, drop the guard. See `file.ts` FE-002 comments.
+
 ### DEC-010 — Engine repo layer moves to a local Gitea (2026-09-08)
 - **Decision:** The p002 engine now targets a self-hosted **Gitea** (http://192.168.1.162:3300, gitea 1.27.3,
   user `mark`). Repos migrated from GitHub by import: `mark/cloud-pos-system` (full git history; issues not
@@ -151,3 +166,130 @@ Format:
 - **Consequences / revisit when:** engine runs double as remote GH (default) or Gitea (`ENGINE_GITEA=1`).
   Git notes: `git <owner>` default config is currently GitHub; launch scripts set GITEA env. GitHub remote
   repos remain authoritative for the ide control center; Gitea selfide is a second mirror.
+
+### DEC-011 — Engine operating rules: one role / no retry / park on timeout (2026-09-08)
+- **Decision:** The p002 driver runs **at most one agent per role** (researcher blocks before engineers;
+  engineer tasks strictly sequential), **never retries** a failed or timed-out agent/cycle, and on a task
+  exceeding its timeout **reports to the product (epic board) and parks** the run
+  (`cycleN-waiting-product`, marathon stops) until the product arranges the next cycle.
+- **Rationale:** The single GB10 LLM backend was saturated by 5 concurrent agents (cycle-2: 4 engineers +
+  researcher) → per-completion latency 3–15 min → all killed by the 1h watchdog with no usable result
+  (s005 diagnosis). Serial roles + a bigger configurable watchdog (7200s) keep the GPU load sane, and
+  "parks, never retries" makes every failure a visible product decision instead of silent churn.
+- **Alternatives rejected:** bigger parallel pools + longer timeouts (still thrashes the backend);
+  auto-retry (wasted hours on a degraded gateway, hides failures); background-resume of a parked cycle
+  (product explicitly wants control of the next cycle).
+- **Consequences / revisit when:** state is preserved per-task (merged+pushed immediately; `workers-*.jsonl`
+  + `_phase()` resume), so a parked cycle re-runs only incomplete tasks. Follow-ups: decide whether
+  qa/reviewer/designer timeouts should also park (currently only researcher/engineer park).
+
+### DEC-013 — FE-003: foreground re-sync via heartbeat liveness + forced open-session sync (2026-09-08)
+- **Decision:** The web app re-syncs on mobile foreground with two client-only changes in `packages/app`:
+  (1) `server-sdk.tsx` tracks the last SSE event time and, on `visibilitychange`→visible / `pageshow`
+  (persisted), restarts the event stream **only if it has been silent > 20 s** (both v1/v2 streams emit
+  `server.heartbeat` every 10 s, so a healthy stream is never that quiet); a restarted stream re-emits
+  `server.connected`, which drives the existing connected-time refresh (session lists, statuses,
+  bootstrap). (2) `directory-layout.tsx` force-syncs the open session on foreground
+  (`session.sync(id, {force:true})`), the same merge-safe path the tab switch already uses.
+- **Rationale:** SSE has no replay; events emitted while the phone is suspended are lost, and nothing
+  re-fetches the open session's messages until a tab switch remounts the session page. This closes the
+  gap exactly at the point the user hit it, reusing tested existing APIs (`sync`, `server.connected`
+  refresh) instead of adding server-side buffering or push.
+- **Alternatives rejected:** service-worker/push buffering (large server+client change, iOS SW limits);
+  unconditional stream restart on every foreground (needlessly churns healthy desktop tabs);
+  freshness-gated session re-fetch (the bounded one-request re-fetch matches tab-switch semantics and is
+  simpler; a gate can be added later if it proves wasteful).
+- **Consequences / revisit when:** one bounded message-page re-fetch per foreground; desktop unaffected
+  while the stream is healthy. If foreground churn ever becomes noticeable, add a freshness gate on the
+  session re-fetch. iOS field test pending (FU-022/FU-020).
+
+### DEC-012 — Cycle flow refined: sub-cycles for half-done work, no park-on-timeout (2026-09-08)
+- **Decision:** Replace "timeout → park run for product" with a continuous flow (user spec):
+  - An engineer task that does NOT finish within its budget is recorded **"half"** (its worktree, task
+    branch and opencode session are preserved) and the cycle continues with the next task.
+  - Before the next main cycle, the marathon runs a **small cycle `N.1`** (then `N.2`…) that processes
+    ONLY the half-done tasks of cycle N (resuming their original sessions via the knowledge bridge), then
+    QA/review/ship for the completed delta.
+  - Tasks never started roll forward to the next **main** cycle (`N+1`).
+  - Engineer workload per cycle is **"as much as one engineer can do"** — bounded by a per-cycle time
+    budget (`engineer.cycle_time_secs`, default 12h), not a fixed task count.
+- **Rationale:** a hard park turns transient slowness into a stop-the-world decision; flowing half-done
+  work into small cycles keeps progress monotonic and lets the product only manage boundary decisions,
+  matching how a human dev would hand over a WIP. Sub-cycles reuse the same session/context for continuity.
+- **Alternatives rejected:** keep parking (staleness, manual churn); merge half-done work into the next
+  main cycle's tasks (mixes WIP with new scope, loses the "small cycle" clarity).
+- **Consequences / revisit when:** `--cycle` is now a string ("3", "3.1"); `workers-<base_cycle>.jsonl`
+  statuses are done/half; sub-cycles skip assembler+researcher; `assembler` failure still stops the run
+  (no plan ⇒ cannot proceed). `_park_cycle` removed. Active only from a new marathon spawn.
+
+### DEC-014 — FE-004: mobile folder explorer via @pierre/trees in the open-project dialog (2026-09-08)
+- **Decision:** Use `DialogSelectDirectoryV2` (built on **@pierre/trees** web component, already a
+  dependency / used on desktop) on **every** platform, not just desktop: `directory-picker.tsx` now gates
+  only on `newLayoutDesigns()`. The tree **starts at the last opened project's folder**
+  (`projects.forServer(key).last()`), falls back to server dir / home. Plain tapping the highlighted row
+  **unhighlights it** via a capture-phase click on the tree container reading the row's `data-item-path`
+  and calling `item.deselect()` — the lib otherwise only toggles selection on Ctrl/⌘-click (absent on touch).
+  A ≤680px media query makes the fixed 640×480 dialog full-viewport so it fits a phone.
+- **Rationale:** gives phones the Windows-style folder explorer (drill down by tap, highlight →
+  "Select folder" opens it, else the current folder = existing `pickerMode.result`) with zero new deps;
+  the v1 search-list dialog was the painful part on mobile. Component research confirmed @pierre/trees as
+  the purpose-built file-tree (virtualization, lazy load, selection) vs generic SolidJS trees.
+- **Alternatives rejected:** switching to generic SolidJS tree libs (solidjs-treeview-component, Zag,
+  kobalte, shadcn-tree) — none are drop-in file explorers with server-side lazy listing; building a custom
+  drill-down from scratch — duplicating @pierre/trees features.
+- **Consequences / revisit when:** v1 search-list dialog becomes dead code if we ever drop the legacy
+  layout. The capture-phase click intercept relies on the row `data-item-path` attribute — re-verify on
+  @pierre/trees major updates. iPhone field test pending (FU-023).
+
+### DEC-015 — FE-005: iOS completion notifications via Web Push, server-initiated (2026-09-09)
+- **Decision:** Deliver "session finished" notifications to iOS through **Web Push (RFC 8030/8291, VAPID)**
+  driven by the opencode server, not by any client polling. Server (s008): new `Push` LayerNode
+  (`packages/opencode/src/push/push.ts`) that generates/persists VAPID keys under `Global.Path.state/push/`,
+  stores per-origin push subscriptions in `subscriptions.json`, and on each `session.status idle` event
+  sends `{title, body, url}` (deep link `/<base64url-dir>/session/<id>`) via the `web-push` lib, skipping
+  child (sub-agent) sessions. Raw auth-gated HTTP routes (`GET /api/push/pubkey`, `POST
+  /api/push/subscribe|unsubscribe`) added in `src/server/push/route.ts` with the same login middleware as
+  the login page. Client (s009): `public/sw.js` handles `push`→`showNotification` + `notificationclick`→
+  focus/open the session URL; `src/utils/web-push.ts` guards secure-context support, subscribes with the
+  VAPID pubkey and unsubscribes on toggle-off; settings toggle "Background notifications"
+  (`NotificationSettings.webPush`) in the general→Notifications section; `/sw.js` registers at app boot.
+- **Rationale:** iOS suspends background tabs so no client-side mechanism can wake to notify; only a
+  server-initiated push can. The session `idle` state is exactly the "finished" signal the user asked for.
+  Same-origin embedded deployment serves `/sw.js` and the push API from the same origin the app runs on
+  (login-page flow), so cookies/secure context line up.
+- **iOS constraints (from s008 WebKit source check):** origin must be a secure context (HTTPS; LAN IP is
+  not); the page must be added to the Home Screen once (iOS 16.4+); the permission prompt must be in a user
+  gesture (satisfied by the settings toggle); SW must not network-loop on iOS (design is server-push, so ok).
+- **Alternatives rejected:** client background polling (impossible on iOS), third-party push service
+  (VAPID is self-hosted and sufficient), firing on any event rather than the explicit idle state (would
+  annoy the user).
+- **Consequences / revisit when:** requires an HTTPS origin in practice (FU-020/FU-025). SW cache-control on the
+  real origin may need no-cache to avoid stale SW on updates. Service-worker copy is intentionally not i18n'd
+  (outside React; notifications are short and system-styled).
+- **Follow-up (s009):** `disableLogger` reverted to `true` before commit — the running fork binary keeps the
+  default (request logs off); only debug restarts add `--print-logs --log-level DEBUG`.
+
+### DEC-016 — Build toolchain pin + raw-router service resolution (2026-09-09)
+- **Decision A (build toolchain):** `scripts/build-linux.sh` now downloads and uses **`bun@1.3.14`**
+  (the version pinned by the repo's `packageManager`) into `~/.cache/opencode-build/bun-1.3.14` rather than
+  relying on whatever `bun` is on PATH. Root cause found when every location-scoped v2 endpoint
+  (`/api/reference`, `/api/agent`, `/api/model`, `/api/fs/list`, ...) returned 500 with
+  `TypeError: undefined is not an object (evaluating 'a.name')` in the effect app-node
+  `resolve`/`recur` compile path — reproduced on a **pristine upstream `ecbc6cc`** build, while running the
+  server **from source** worked. Local bun 1.4.2's compiler embeds a broken schema/layer-node graph; bun
+  1.3.14 compiles clean. Context: `packages/opencode/script/build.ts` uses `minify:true` + `compile` into a
+  single binary; a `NO_MINIFY` experiment did NOT help (not a minification bug), the bun version did.
+- **Decision B (raw HttpRouter service access):** in `packages/opencode/src/server/push/route.ts`, resolve
+  `Push.Service` once at **router-construction** time (inside `HttpRouter.use`'s `Effect.gen`) and capture it
+  into the handler closures, instead of `yield* Push.Service` inside request-time handler effects. Request-time
+  raw-handler effects have no service environment, so every authenticated call to `/api/push/pubkey`,
+  `/api/push/subscribe`, `/api/push/unsubscribe` failed with `500 Service not found: @opencode/Push`. This
+  matches the working login/SPA routes (`server.ts` `uiRoute`), which also resolve services at build time.
+- **Rationale:** upstream CI builds with the pinned bun; reproducing the toolchain in our build script keeps
+  our binaries identical-by-construction. Raw `HttpRouter` handlers are plain request → response functions with
+  no `Context` environment, unlike `HttpApi` handlers which get services inserted by `HttpApiBuilder`.
+- **Consequences / lessons:** (1) Always test authenticated endpoints for a new API surface, not just the
+  auth gate (the 401-vs-500 split hid this for a full session). (2) Compile-only bugs are spliced by comparing
+  source-run vs compiled-run; keep `git worktree` + pinned-toolchain rebuild in the debug checklist
+  (`30-runbooks`?). (3) Health checks on this host should run with `LANG=C` — two `project-copy` assertions
+  fail on the Chinese locale's git error text.
