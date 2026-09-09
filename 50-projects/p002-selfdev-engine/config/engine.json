@@ -3,7 +3,7 @@
   "opencode_bin": "/home/mark/.opencode/bin/opencode",
   "workdir": "/tmp/opencode/engine-work",
   "state_dir": "ENGINE_STATE",
-  "model": "",
+  "model": "dgx/general",
   "roles": [
     "assembler",
     "engineer",

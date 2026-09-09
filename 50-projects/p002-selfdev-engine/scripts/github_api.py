@@ -127,6 +127,17 @@ def add_issue_comment(repo, issue_no, body):
     return request("POST", f"/repos/{repo}/issues/{issue_no}/comments", {"body": body})[1]
 
 
+def add_wiki_page(repo, title, content, message=""):
+    """Create/update a wiki page so findings accumulate over cycles (Gitea-only; GitHub has no wiki API)."""
+    if not _is_gitea():
+        _log(f"wiki: skip on GitHub (no wiki API) repo={repo}")
+        return False
+    d = {"title": title, "content": content, "message": message or f"engine wiki: {title}"}
+    code, _ = request("POST", f"/repos/{repo}/wiki/new", d)
+    _log(f"wiki: {title} -> http {code}")
+    return 200 <= code < 300
+
+
 def get_issue_comments(repo, issue_no, _last=None):
     return request("GET", f"/repos/{repo}/issues/{issue_no}/comments?per_page=100")[1]
 
