@@ -3,19 +3,46 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
-- **Last updated:** 2026-09-09 (UTC) — session s011 (FE-004 folder-picker tweaks, pending rebuild).
-  p003
-  fork **deployed live at http://192.168.1.249:4447/** (pid 2617472; binary `0.0.0-dev-202609091003`,
-  **built with bun 1.3.14**, includes FE-001..FE-005) with **FE-001** cookie-auth login, **FE-002**
-  project-selector fix, **FE-003 foreground re-sync**, **FE-004 folder explorer on mobile**, and **FE-005 iOS
-  completion notifications (Web Push)** — server `Push` LayerNode + auth-gated `/api/push/*`, `public/sw.js`
-  served publicly, client subscribe util + "Background notifications" settings toggle + boot SW registration.
-- **s011 change (code done, NOT deployed):** FE-004 picker tweaks in `dialog-select-directory-v2.tsx` —
-  (1) removed "tap highlighted folder again → unhighlight"; (2) picker now lists the tree from filesystem
-  root (`/` or `X:`) on open instead of jumping into the last-opened folder (last-opened stays default
-  selection); (3) typing a path (`~/...`) + Enter now *reveals* it in the root-level tree (ancestors
-  expanded + target highlighted) instead of navigating into it. Local typecheck clean + 25 picker tests
-  green. **Next: rebuild + redeploy, then iPhone field test (FU-023).**
+- **Last updated:** 2026-09-12 (UTC) — s018 FE-007 DEPLOYED: 0.0.0-dev-202609120534 (pid 305738).
+- **p003 deployed fork (current):** live at http://192.168.1.249:4447/ (pid 305738; binary
+  `0.0.0-dev-202609120534`, **built with bun 1.3.14**, includes FE-001..FE-007 + s011 + s012 + s013 + s014 + s015 + s017).
+  Includes **FE-001** cookie-auth login, **FE-002** project-selector fix, **FE-003 foreground re-sync,
+  **FE-004 folder explorer on mobile**, **FE-005 iOS completion notifications (Web Push)**, **FE-006
+  sidebar last-prompt subtitle** (session row shows the newest user prompt under the title; row tooltip
+  `title\nprompt`; dense popover rows unchanged; **bulk async prefetch** fills all listed rows at 20
+  msgs/session ≤25/folder, hover upgrades to 200), **FU-031 → home Sessions tab now shows the real
+  last-prompt subtitle** under each title (per-row preview prefetch 20 msgs, 3 concurrent), **s011** picker
+  tweaks (root-level listing, reveal-on-typed-path, no unhighlight-on-2nd-tap), **s012** logout button,
+  **s013** question/permission-dock dismiss fixes + i18n parity, **s014** removes the tab close (X)
+  icon (close still via context menu / middle-click / keybind), **s015** home page split into 2 tabs via
+  `SegmentedControlV2` — **Sessions** (default; dedicated `createHomeSessionsTableController` — table of ALL
+  folders' sessions sorted by last update; no folder pre-selection needed — `open` auto-resolves+
+  selects the session's folder) and **Projects** (original folder-select + session grid, driven by the ORIGINAL
+  shared controller — fully preserved, decoupled from Sessions tab in v3), **FE-007 (s018)** → the home
+  **Sessions** tab rows are now **mobile-first 3-line cards** (`items-start`): title `flex-1` clamped to
+  2 lines + relative time top-right (no fixed 64px), project name as a small muted line under the title with
+  v2 folder icon (was a fixed 112–160px column), and the FE-006 last-prompt preview as a 3rd line clamped
+  to 2 lines (only when present). Verified login 200 /
+  unauthenticated `/` 401 (FE-001 intact); binary grep confirms new markup shipped; log clean. Tunnel URL unchanged
+  `https://orlando-expansion-thu-toxic.trycloudflare.com`
+  (ephemeral; quick tunnels buffer SSE — live streaming stays refetch-driven).
+- **Deploy note (s011 follow-up):** the prior instance (pid 2790696, `0.0.0-dev-202609091626`) **crashed**
+  ~6h after deploy — log ended with `MaxListenersExceededWarning: Possible EventTarget memory leak,
+  11 event listeners`; tunnel returned 502 until the server was restarted (tunnel itself never expired).
+  **OPEN:** root-cause the EventTarget listener accumulation (suspected SSE/EventTarget churn).
+- **s013 full scope (code done, now deployed):**
+  1. **Question-dock dismiss fix** — "question dock stays open after the user picks an option and submits
+     (answer accepted server-side, dock never dismisses)." Root cause: the dock dismissed **only** on the
+     `question.v2.replied`/`.rejected` **SSE** event; a lost/buffered event (quick-tunnel SSE buffering known
+     since s010, mobile background suspension, stream drop) left the store holding the request → dock stuck.
+     Fix: in `session-question-dock.tsx`, on a **successful** `question.reply`/`.reject` mutation, splice the
+     answered request out of the shared store (`dismiss()`); `onError` intentionally does NOT clear.
+  2. **FU-027 (permission dock)** — same latent bug fixed in `session-composer-state.ts` `decide()`: on a
+     successful `permission.reply`, splice the request out of `permission[perm.sessionID]`.
+  3. **FU-026 (i18n parity)** — added `sidebar.logout`/`sidebar.logoutConfirm` (English fallback) to all 61
+     app-locale files after `sidebar.settings`; parity + full `test:unit` all green (730/730).
+  DEC-017. Verification: typecheck clean, oxlint 0 err, `test:unit` 730/730. **Remaining:** iPhone field
+  test of FE-004 picker behavior (FU-023).
 - **s010 bugfixes (all deployed):** (1) compiled single-file binary with bun ≥1.4.2 crashes all
   location-scoped v2 endpoints — pinned `scripts/build-linux.sh` to the official `bun@1.3.14`
   (`packageManager`); (2) `/api/push/*` 500'd authenticated (`Service not found: @opencode/Push`,
@@ -69,6 +96,8 @@ A web-interface wrapper around **opencode** (`opencode serve`, HTTP REST + SSE o
 | 2026-09-08 | s007 | **FE-004 mobile folder explorer** — open-project uses the `@pierre/trees` v2 dialog on all platforms, starts at the last opened project's folder, tap-to-deselect, "Select folder" opens highlighted-or-current folder; full-viewport on phones; DEC-014; live on :4447 (pid 2229139); iPhone field test pending. |
 | 2026-09-09 | s009 | **FE-005 iOS completion notifications (Web Push)** — server side (WebKit research + VAPID + `Push` layer + `/api/push/*` routes) in s008; client side now complete (service worker + subscribe util + settings toggle + boot SW registration + i18n). Verified: server typecheck, app typecheck, clean `vite build` emitting `dist/sw.js`. DEC-015. Cloudflare quick tunnel brought up (ephemeral URL). |
 | 2026-09-09 | s010 | **FE-005 deploy bugs fixed + "Thinking" root cause** — (1) bun ≥1.4.2 compiler breaks v2 endpoints → `scripts/build-linux.sh` pins `bun@1.3.14`. (2) `/api/push/*` 500'd authenticated → fixed `40b1633`. (3) web-mobile "Thinking" row never dismissed → **root cause: quick Cloudflare tunnel buffers SSE body** (headers OK, zero bytes; probed RX/EMIT/store empty); fixed `d1389e2` (reconcile on reconnect) + `3e46b18` (15s status watchdog); Playwright tunnel test DISMISSED. Tunnel URL changed → `orlando-expansion-thu-toxic.trycloudflare.com`. DEC-016. |
+| 2026-09-10 | s013 | **Question-dock + permission-dock dismiss bug fixes; i18n parity green (code done, NOT deployed)** — (1) question dock: dismissal was **SSE-only** (`question.v2.replied`/`.rejected`); a lost/buffered event left the store holding the request, so the dock stayed open after a 200'd reply. Fix: on a **successful** reply/reject mutation, splice the request out of the store (`dismiss()`, DEC-017). (2) FU-027: identical fix for the permission dock in `session-composer-state.ts` `decide()`. (3) FU-026: added the s012 logout keys (English fallback) to all 61 app-locale files; `i18n/parity.test.ts` 5/5. Full `test:unit` **730/730**, typecheck + oxlint clean. |
+| 2026-09-12 | s018 | **FE-007 home Sessions-tab row → mobile-first multi-line card** — `home-sessions-table.tsx` `HomeSessionTableRow` redesigned from a one-line strip (fixed 112–160px project column starved text on phones; everything single-line truncated) to a 3-line stacked card: title `flex-1` 2-line clamp + relative time top-right; project name demoted to a muted line under the title with v2 folder icon; FE-006 last-prompt preview as 3rd 2-line-clamped line. `items-start`, avatar top-aligned. Verified typecheck/lint/737 unit tests; built with pinned bun 1.3.14 → `0.0.0-dev-202609120534` (pid 305738) live on :4447, log clean, binary grep confirms new markup. |
 
 ## s002 addendum (research only, 2026-09-07)
 - New p002 direction proposed: **self-testing/thinking/completing multi-agent dev engine** — multiple
@@ -123,3 +152,47 @@ A web-interface wrapper around **opencode** (`opencode serve`, HTTP REST + SSE o
   do" (`engineer.cycle_time_secs`, default 12h). `--cycle` accepts "3.1"; applies from the next marathon
   spawn (cycle 3 is finishing on the previous binary).
 - Open: qa/reviewer/designer timeouts still just block-merge (do NOT park) — FU pending on whether to extend rule 3.
+
+## s016 addendum (FE-006 code — sidebar last-prompt subtitle, 2026-09-12)
+- **FE-006 DEPLOYED** (client-only, `packages/app`) as `0.0.0-dev-202609120234` (pid 219946, :4447).
+  Workspace-sidebar session rows now show a **last user prompt** subtitle under the title; the row
+  tooltip shows `title\nprompt`; hidden for dense project-popover rows. New util
+  `session-last-prompt.ts` extracts the newest user message's real text part from the existing message
+  store (prefetch fills it). No server change.
+- **Verified:** `bun run typecheck` ✅; `bun run test:unit` ✅ 737 pass / 0 fail (7 new tests);
+  **Bulk async prefetch** (same session): on list render, all visible sessions get a small prefetch
+  (20 msgs each, ≤25/folder, 2 concurrent) so every row gets its subtitle; hover still upgrades to 200.
+- **Build/deploy (10:36 UTC):** `./scripts/build-linux.sh` → 0.0.0-dev-202609120234; old pid 3967592
+  killed (`0.0.0-dev-202609111028`); `run-web.sh 4447` → pid 219946. Smoke: unauth `/` 401, `/login` 200,
+  authed root 200; served entry `index-BV48gH_b.js` (was `index-CAzbSeqL.js`); served bundle contains
+  `lastPrompt` + `text-text-secondary`. FU-030 **closed**.
+- **FU-031 (new, user-decide):** reuse FE-006's prompt extraction in the home **Sessions tab** (which
+  currently uses `session.title` = last prompt as proxy — original FU-029).
+
+## s017 addendum (chat-header close button, 2026-09-12)
+- **s017 code complete (client-only, `packages/app`), NOT built/deployed.** Adds an X (close-tab)
+  button in the session chat header, immediately right of the 3-dots "more options" trigger (the menu
+  that contains Archive). It closes the current agent/session tab via the top-level tabs store
+  `closeTab` (records for reopen, mirrors titlebar `tab.close`). Renders in both v2 and legacy layouts
+  and on child agent sessions. Restores an in-body close affordance after s014 removed the titlebar X.
+- **Verified:** `bun x tsgo -b packages/app` ✅; `bun x oxlint message-timeline.tsx` ✅ (no new warnings).
+- **Deployed** with FU-030 build 0.0.0-dev-202609120234 (pid 219946) — **closed**, smoke verified in
+  s016's deploy pass (chat-header X bundled in same binary).
+
+## s018 addendum (FE-007 home Sessions-tab row → mobile-first multi-line card, 2026-09-12)
+- **FE-007 DEPLOYED** (client-only, `packages/app`) as `0.0.0-dev-202609120534` (pid 305738, :4447).
+  The starting/home **Sessions** tab's session row was a one-line strip whose fixed project column
+  (112–160px) ate half a phone's width and truncated every text field. Now a **3-line mobile card**
+  (`items-start`): **title** `flex-1` clamped to **2 lines** with the **relative time top-right** (no
+  reserved 64px), **project name** demoted to a muted line under the title with the v2 **folder** icon,
+  and the **FE-006 last-prompt preview** as a third line clamped to **2 lines** only when present.
+  No controller/schema change; markup only in `home-sessions-table.tsx`.
+- **Why multi-line clamp:** the question dock already used `-webkit-line-clamp`, so we reuse the same
+  inline-style pattern; `truncate` was dropped for the title and prompt.
+- **Verified:** `bun run typecheck` ✅; `bun run test:unit` ✅ 737 pass / 0 fail; oxlint clean.
+- **Build/deploy (13:35 UTC):** `./scripts/build-linux.sh` (pinned bun 1.3.14) → version
+  `0.0.0-dev-202609120534`; old pid **248812** killed (`0.0.0-dev-202609120259`, s017 build); `run-web.sh
+  4447` → pid **305738**. Smoke: unauth `/` 401 (FE-001 login page active, unchanged), server log clean;
+  binary grep finds `items-start justify-between gap-3` (new title row markup) → change is compiled in.
+- **Follow-up:** visual check on a physical phone (FU-028 area) — confirm long titles warp to 2 lines,
+  project line + folder icon render, long prompt previews wrap.

@@ -293,3 +293,104 @@ Format:
   source-run vs compiled-run; keep `git worktree` + pinned-toolchain rebuild in the debug checklist
   (`30-runbooks`?). (3) Health checks on this host should run with `LANG=C` — two `project-copy` assertions
   fail on the Chinese locale's git error text.
+
+### DEC-017 — Dismiss request docks locally on a confirmed response, don't rely only on the reply SSE event (2026-09-10)
+- **Decision:** In `packages/app/.../session-question-dock.tsx`, on a **successful** `question.reply` /
+  `question.reject` mutation, splice the answered request out of the shared store
+  (`sync().set("question", request.sessionID, splice-out request.id)`) so the dock dismisses immediately.
+  The splice mirrors the existing SSE-event handlers (`context/global-sync/event-reducer.ts:454`,
+  `context/server-session.ts:1280`); the local clear just makes it independent of SSE.
+- **Rationale:** the dock was dismissed **only** by the `question.v2.replied`/`.rejected` SSE event. When that
+  event is lost — quick-tunnel SSE buffering (known since s010), mobile background suspension killing the
+  stream, or any transient stream drop — the reply succeeds server-side (HTTP 200) but the store never
+  clears, so the dock stays open forever. Clearing on `onSuccess` (which fires only after the API call
+  resolved) is race-free and matches the server state; `onError` intentionally does NOT clear so the dock
+  stays open to retry.
+- **Consequences / revisit when:** `SessionPermissionDock` (session-composer-state.ts `decide`) has the
+  **identical** latent bug (dismisses only on the `permission.replied` SSE event) — see FU-027; apply the
+  same local-clear-on-success there if it reproduces. This is the same fix *class* as the s010 "Thinking row"
+  watchdog (DEC-016-era): **never make a UI dismissal depend on a single fire-once SSE event with no local
+  reconciliation.**
+
+### DEC-018 — Home page split into "Projects" / "Sessions" tabs (2026-09-11, s015)
+
+- **Context:** user wanted the `/home` landing restructured into a 2-tab view: (1) original folder
+  selection + project select, (2) a table of **all project sessions gathered across all projects,
+  sorted by last prompt** — WITHOUT the need to pre-select a folder each time. An earlier draft of tab 2
+  listed *projects* (`HomeProjectsList`); the user clarified they want *sessions*, so it was replaced by
+  a sessions table. v2 removes the folder pre-selection entirely; v3 (final) decouples the two tabs so the
+  Projects tab is preserved exactly.
+- **Decision:** top `SegmentedControlV2` in `pages/home.tsx`. Tab "Sessions" (default) renders
+  `HomeSessionsTable`; tab "Projects" renders the original home grid unchanged. Reused existing i18n
+  keys (`home.projects`, `home.sessions.search.sessions`) — no new keys, so the 66-locale parity test
+  is untouched. **v3:** the Sessions tab uses a DEDICATED `createHomeSessionsTableController`
+  (`home-sessions-table-controller.tsx`) with its own query (`loadHomeSessionIndex`, all projects'
+  worktrees+sandboxes), its own `records` build, its own `open`/`isOpenTab`/`server`. The original
+  `createHomeSessionsController` is left UNCHANGED (project-scoped `projectDirectories`,
+  `showProjectName = !selected`) and drives only the Projects tab. `HomeSessionStatusController` +
+  `SessionTabAvatarView` are stateless presentational/status pieces over the global avatar store, shared
+  by rows everywhere without affecting tab logic. Sorted by `session.time.updated ?? time.created`
+  descending; unread dot + bold when unread; session title (last prompt) from `session.title`. Row click =
+  the table controller's `open(...)` which resolves the project from `session.directory` and calls
+  `ctx.projects.open(directory)` — folder auto-selected per session.
+- **Rationale:** tab 1 preserves the folder-based flow for users who want it. Defaulting to the
+  cross-folder Sessions list removes the friction of always picking a folder the user never uses.
+  A separate controller per tab guarantees changes to one never leak into the other (the user hit this
+  leakage in v2 when mutating the shared controller changed the Projects sidebar). Reuses already-loaded
+  home-session records — no new persistence or per-session message sync needed.
+  Deriving "last prompt" from `session.title` avoids loading every session's messages.
+- **Consequences / revisit when:** if an exact raw last-user-message line is wanted, add per-session
+  message sync (FU-029). Visual check on iPhone pending (FU-028). If the two tabs feel redundant with the
+  sidebar, consider merging them and/or adding sort controls.
+
+### DEC-019 — Sidebar last-prompt subtitle via the client message store (2026-09-12, s016)
+
+- **Context:** FE-006 — user wants each session in the workspace sidebar to show the **last prompt I
+  sent** under the session title. Options: (a) persist a `lastPrompt` field server-side on `Session`
+  (schema + DB + Server HttpApi + SDK regen), (b) derive it client-side from the in-app message store.
+- **Decision:** **(b) client-only.** New util `sessionLastPrompt(sync, sessionID)`: walk
+  `serverSync().session.data.message[sessionID]` newest-first, take the newest **user** message whose
+  `part[sessionID][message.id]` contains a real text part (`type === "text"`, not `synthetic`, not
+  `ignored`) — same convention as `components/dialog-fork.tsx` — and return its text with whitespace
+  normalized to single spaces. `SessionRow` renders it as a `text-13-regular` subtitle (hidden for
+  `dense` rows); the row tooltip shows `title\nprompt`. Pure additive — no persistence, no API change.
+- **Rationale:** the existing session **prefetch** path (layout.tsx `prefetchSession` →
+  `shouldPrefetch`) already populates `data.message`/`data.part` for listed sessions, so the text is
+  available at render time for near-zero cost and stays reactive (subtitle appears as messages load).
+  Scaffolding a server field (option a) is heavier and touches generated code and DB migrations on a
+  vendored fork for unchanged visual value.
+- **Consequences / revisit when:** cold sessions show the subtitle only once prefetched (acceptable —
+  brief blank state). Dense overlay rows intentionally skip the subtitle. **Revisit:** if the home
+  **Sessions tab** should also show the exact raw prompt instead of the `session.title` proxy (DEC-018;
+  FU-029 / FU-031), the same `sessionLastPrompt` technique applies there; a server-side field becomes
+  worthwhile only if many sessions need prompt text without prefetch.
+  - **Update (s016, same day):** to cover EVERY listed session (not just hover/neighbors), the prefetch
+    queue was widened — items now carry `{ id, limit, keep }`, and a bulk effect on `currentSessions()`
+    enqueues all visible sessions at `previewLimit = 20` messages each and per-dir cap 25; the eviction
+    keep-count follows each item so preview data isn't swept after fetch; hover still upgrades to 200.
+    Cost: up to N small fetches on open (2 concurrent) — accepted by user explicitly ("async ajax / call
+    API").
+
+### DEC-020 — Home Sessions-tab row: mobile-first multi-line card instead of a single-line strip (2026-09-12, s018)
+
+- **Context:** FE-007 — the starting (home) **Sessions** tab's session row was a one-line horizontal
+  flex with 4 columns: `[avatar] [project w-28 sm:w-40] [title + last-prompt (both truncate)] [time w-16]`.
+  On a ~360px phone the fixed project column (112–160px) ate ~half the width, starving the title, and
+  every text field was single-line truncated so long prompts vanished entirely.
+- **Decision:** redesign the row as a **3-line stacked mobile card** (client-only, markup change in
+  `home-sessions-table.tsx`): (1) **title** is `flex-1` clamped to **2 lines** via inline
+  `-webkit-line-clamp:2` / `-webkit-box-orient:vertical` (the pattern the question dock already uses);
+  (2) **relative time** moves to the **top-right**, top-aligned with the title (no reserved 64px next to
+  the text); (3) **project name** drops out of the fixed-width column — it becomes a small muted line
+  under the title with the v2 **folder** icon, single-line truncate; (4) the **FE-006 last-prompt
+  preview** becomes a third line, also clamped to **2 lines**, only when present. Row container switched
+  `items-center` → `items-start`, avatar top-aligned.
+- **Rationale:** on phones a linear "table" with a fixed meta column is unreadable — every pixel of
+  horizontal space should go to the content text, and meta (project/time) should either float top-right
+  (time, doesn't wrap) or stack as a secondary line (project). Multi-line clamps keep the list scannable
+  without expanding rows unboundedly; 2 lines covers virtually all real titles/prompts at phone widths.
+- **Consequences / revisit when:** rows are vertically taller (3 lines max ≈ title 2 + project 1 + prompt
+  2); dense lists show fewer rows per viewport but each is far more informative. No controller/schema/API
+  change — pure markup; verified by typecheck + oxlint + 737 unit tests and built with the pinned bun
+  1.3.14 (DEC-016). **Revisit:** if a future compact list view is wanted (e.g. many rows scrolling fast),
+  add a CSS density toggle rather than reintroducing the fixed project column.

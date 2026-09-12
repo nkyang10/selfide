@@ -163,3 +163,78 @@
 | 2026-09-09 16:10 | s011 | app | add reveal() in dialog-select-directory-v2.tsx; Enter fallback -> reveal(input()) so typed paths reveal-from-root instead of navigate-into | 0 | code changed (fix for ~/ typed path) |
 | 2026-09-09 16:12 | s011 | verify | bun x tsgo -b (typecheck) | 0 | clean |
 | 2026-09-09 16:12 | s011 | verify | bun test directory-picker*.test.ts + pierre-tree.test.ts | 0 | 25 pass / 0 fail |
+| 2026-09-10 16:02 | s011 | ops | discover :4447 server DEAD (pid 2790696 gone; log ends MaxListenersExceededWarning, 11 listeners) | 0 | tunnel 502 because origin down, not expiry; cloudflared still up (uptime 1d) |
+| 2026-09-10 16:39 | s011 | deploy | rebuild (bun 1.3.14) -> 0.0.0-dev-202609101639; ./scripts/run-web.sh 4447 -> pid 3453286 | 0 | smoke test passed; :4447 listening |
+| 2026-09-10 16:40 | s011 | verify | localhost + LAN + tunnel all 200 (Basic opencode:hahahaha) | 0 | tunnel URL unchanged orlando-expansion-thu-toxic; server stable, 0 MaxListeners in new log |
+| 2026-09-10 00:38 | s012 | fork | edit icon.tsx (add log-out icon), home-projects-view.tsx (logout btn above settings), i18n en.ts (logout keys) | 0 | typecheck app+ui clean; oxlint touched files 0 err; pre-existing tui-smoke lint error unrelated |
+| 2026-09-10 02:06 | s013 | app | edit session-question-dock.tsx: add useSync+Binary+produce imports, `dismiss()` helper (splice question out of store by request.id), call in reply/reject `onSuccess` | 0 | root cause: dock dismissed only via SSE question.replied; lost event (tunnel/SSE buffering/mobile suspend) = dock stuck even though reply 200 |
+| 2026-09-10 02:06 | s013 | verify | bun run typecheck (packages/app, tsgo -b) | 0 | clean |
+| 2026-09-10 02:06 | s013 | verify | bunx oxlint packages/app/.../session-question-dock.tsx (from repo root) | 0 | 0 errors; 3 pre-existing no-unnecessary-boolean-literal-compare warnings (lines 98/160/283, not mine) |
+| 2026-09-10 02:06 | s013 | verify | bun run test:unit (packages/app) | 1 | 729 pass / 1 fail (730) — FAIL = i18n parity (s012 logout keys missing in 65 locales, pre-existing, unrelated to this change); flagged FU-026 |
+| 2026-09-10 02:06 | s013 | verify | bun test event-reducer.test.ts | 0 | 16 pass (question asked/replied/rejected store logic intact) |
+| 2026-09-10 02:21 | s013 | FU-027 | edit session-composer-state.ts decide(): on successful permission.reply -> sync().set permission splice-out (same pattern as question dock) | 0 | permission dock now dismisses on server-confirm, independent of SSE |
+| 2026-09-10 02:21 | s013 | FU-026 | python script: insert sidebar.logout + sidebar.logoutConfirm (English fallback) into all 61 app-locale files after sidebar.settings | 0 | 61 patched, 0 skipped, 0 no-anchor; format verified (2-space indent, key ordering matches en.ts) |
+| 2026-09-10 02:21 | s013 | verify | bun test src/i18n/parity.test.ts | 0 | 5 pass / 0 fail (979 expect) |
+| 2026-09-10 02:21 | s013 | verify | bun run test:unit (packages/app) | 0 | 730 pass / 0 fail — FULL suite green |
+| 2026-09-10 02:21 | s013 | verify | bun run typecheck (packages/app) + oxlint session-composer-state.ts, session-question-dock.tsx | 0 | typecheck clean; oxlint 0 errors (4 pre-existing warnings, none added) |
+| 2026-09-10 16:50 | s014 | app | titlebar-tab-nav.tsx: remove tab-close IconButtonV2 block from TabNavItem + DraftTabItem; drop unused import | 0 | code changed |
+| 2026-09-10 16:51 | s014 | app | titlebar-tab-nav.css: remove dead [data-slot="tab-close"] rules (positioning/hover/edit/narrow) | 0 | code changed |
+| 2026-09-10 16:51 | s014 | verify | bun x tsgo -b (packages/app) | 0 | clean |
+| 2026-09-10 16:52 | s014 | verify | bun test titlebar-tab-gesture/order/session-events/history | 0 | 12 pass / 0 fail |
+| 2026-09-10 16:53 | s014 | deploy | rebuild (bun 1.3.14) -> 0.0.0-dev-202609101653; restart :4447 -> pid 3482759 | 0 | smoke test passed |
+| 2026-09-10 16:54 | s014 | verify | localhost + LAN + tunnel all 200 (Basic opencode:hahahaha) | 0 | deployed on same tunnel URL |
+| 2026-09-11 09:00 | s015 | implement | add `pages/home/home-projects-list.tsx` (tab-2 rich project list) | 0 | new file; reuses existing i18n keys, no locale churn |
+| 2026-09-11 09:05 | s015 | implement | restructure `pages/home.tsx`: SegmentedControlV2 (Projects / Recent projects) | 0 | tab 1 = original grid (unchanged), tab 2 = new list; default = Projects |
+| 2026-09-11 09:10 | s015 | verify | `bun run typecheck` (app pkg) | 0 | pass |
+| 2026-09-11 09:11 | s015 | verify | `bun test ./src/i18n/parity.test.ts` | 0 | 5 pass (no new keys added) |
+| 2026-09-11 09:12 | s015 | verify | `bun run test:unit` (app pkg) | 0 | 730 pass / 0 fail |
+| 2026-09-11 09:15 | s015 | verify | `bun run build` (vite, app pkg) | 0 | dist built cleanly |
+| 2026-09-11 09:18 | s015 | build | `./scripts/build-linux.sh` (bun 1.3.14, --single) | 0 | 0.0.0-dev-202609110917 smoke passed |
+| 2026-09-11 09:19 | s015 | deploy | kill pid 3482759; start new binary `web --port 4447` -> pid 3931112 | 0 | login 200; unauthenticated / 401 (FE-001 intact); unread-dot marker present in binary bundle |
+| 2026-09-11 09:35 | s015 | implement | replace `home-projects-list.tsx` with `home-sessions-table.tsx` (tab 2 = all sessions across projects, sorted by last prompt) | 0 | per user: tab 2 should list sessions, not projects |
+| 2026-09-11 09:38 | s015 | verify | `bun run typecheck` (app pkg) | 0 | pass |
+| 2026-09-11 09:39 | s015 | verify | `bun run test:unit` (app pkg) | 0 | 730 pass / 0 fail |
+| 2026-09-11 09:41 | s015 | verify | `bun run build` (vite, app pkg) | 0 | built; entry `index-B_vKqqo6.js` contains `home-session-table-row` |
+| 2026-09-11 09:43 | s015 | build | `./scripts/build-linux.sh` (bun 1.3.14, --single) | 0 | 0.0.0-dev-202609110943 smoke passed |
+| 2026-09-11 09:47 | s015 | deploy | kill pid 3931112; start new binary `web --port 4447` -> pid 3936444 | 0 | login 200; unauth / 401; served entry `index-B_vKqqo6.js` contains `home-session-table-row`; log clean |
+| 2026-09-11 10:05 | s015 | implement | v2: cross-folder sessions — `projectDirectories` = all projects, `showProjectName` = true, default tab = Sessions | 0 | eliminates folder pre-selection; `open` already auto-selects folder via `ctx.projects.open` |
+| 2026-09-11 10:08 | s015 | verify | `bun run typecheck` (app pkg) | 0 | pass |
+| 2026-09-11 10:09 | s015 | verify | `bun run test:unit` (app pkg) | 0 | 730 pass / 0 fail |
+| 2026-09-11 10:10 | s015 | verify | `bun run build` (vite, app pkg) | 0 | built; entry `index-DAfrQCc3.js` |
+| 2026-09-11 10:11 | s015 | build | `./scripts/build-linux.sh` (bun 1.3.14, --single) | 0 | 0.0.0-dev-202609111011 smoke passed |
+| 2026-09-11 10:12 | s015 | deploy | kill pid 3936444; start new binary `web --port 4447` -> pid 3965756 | 0 | login 200; unauth / 401; served entry `index-DAfrQCc3.js` contains `home-session-table-row`; log clean |
+| 2026-09-11 10:22 | s015 | refactor | v3: decouple tabs. Revert shared controller (projectDirectories/showProjectName) to original; new `home-sessions-table-controller.tsx` (own query/records/open/isOpenTab); home.tsx Sessions tab uses tableSessions | 0 | Projects tab preserved exactly; Sessions tab independent |
+| 2026-09-11 10:25 | s015 | verify | `bun run typecheck` (app pkg) | 0 | pass |
+| 2026-09-11 10:26 | s015 | verify | `bun run test:unit` (app pkg) | 0 | 730 pass / 0 fail |
+| 2026-09-11 10:28 | s015 | build | `./scripts/build-linux.sh` (bun 1.3.14, --single) | 0 | 0.0.0-dev-202609111028 smoke passed |
+| 2026-09-11 10:29 | s015 | deploy | kill pid 3965756; start new binary `web --port 4447` -> pid 3967592 | 0 | login 200; unauth / 401; served entry `index-CAzbSeqL.js` contains `home-session-table-row`; log clean |
+| 2026-09-12 09:00 | s016 | research | explore: session list components in fork `packages/app` (sidebar-items.tsx, sidebar-workspace.tsx, message/part store shapes) | 0 | SessionRow renders title only; last user prompt extractable client-side from `data.message` + `data.part` |
+| 2026-09-12 09:15 | s016 | app | write `packages/app/src/utils/session-last-prompt.ts` | 0 | New util: newest user message text part, whitespace-normalized |
+| 2026-09-12 09:18 | s016 | app | edit `packages/app/src/pages/layout/sidebar-items.tsx` (SessionRow subtitle + SessionItem lastPrompt memo + tooltip) | 0 | Subtitle under title, dense-gated; tooltip = title\nprompt |
+| 2026-09-12 09:25 | s016 | app | write `packages/app/src/utils/session-last-prompt.test.ts` | 0 | 7 unit tests |
+| 2026-09-12 09:30 | s016 | verify | `bun run typecheck` (packages/app) | 0 | pass after fixing `textPart.text` narrowing + test fixture typing |
+| 2026-09-12 09:35 | s016 | verify | `bun test src/utils/session-last-prompt.test.ts` (packages/app) | 0 | 7 pass / 0 fail |
+| 2026-09-12 09:38 | s016 | verify | `bun run test:unit` (packages/app) | 0 | 737 pass / 0 fail |
+| 2026-09-12 09:40 | s016 | docs | write session record s016, p003 `sessions/fe-006-session-list-last-prompt.md`, update p003 README (FE-006), current-state.md, open-followups (FU-030/031, FU-029 note), decisions-log.md | 0 | Bookkeeping complete |
+| 2026-09-12 10:05 | s017 | explore | read s014 session record (titlebar X removal) + titlebar.tsx/titlebar-tab-nav.tsx close patterns; message-timeline.tsx header layout | 0 | Close = useTabs().store.findIndex + closeTab(index); chat header 3-dots menu at message-timeline.tsx ~1563 |
+| 2026-09-12 10:25 | s017 | app | edit `packages/app/src/pages/session/timeline/message-timeline.tsx` (closeSessionTab handler + xmark IconButtonV2 + TooltipV2 + imports) | 0 | Close button added right of 3-dots trigger in both layout variants |
+| 2026-09-12 10:30 | s017 | verify | `bun x tsgo -b packages/app` + `bun x oxlint message-timeline.tsx` | 0 | typecheck clean; no new lint warnings |
+| 2026-09-12 10:05 | s016 | app | edit `packages/app/src/pages/layout.tsx` — prefetch queue items carry `{id,limit,keep}`; `prefetchSession` gains `{limit,maxPerDir}` opts; new bulk effect on `currentSessions()` enqueues all visible sessions at `previewLimit=20`, cap 25/folder; `markPrefetched` eviction keep-count per item; `prefetchPendingLimit` 10→30 | 0 | Bulk async preview pass implemented |
+| 2026-09-12 10:10 | s016 | verify | `bun run typecheck` (packages/app) | 0 | pass |
+| 2026-09-12 10:11 | s016 | verify | `bun run test:unit` (packages/app) | 0 | 737 pass / 0 fail |
+| 2026-09-12 10:12 | s016 | docs | update session record s016 (addendum), p003 `sessions/fe-006-*`, p003 README FE-006, open-followups FU-030 note | 0 | Bookkeeping refreshed |
+| 2026-09-12 10:34 | s016 | build | `./scripts/build-linux.sh` (bun 1.3.14) | 0 | 0.0.0-dev-202609120234; smoke ok |
+| 2026-09-12 10:36 | s016 | deploy | kill pid 3967592; `./scripts/run-web.sh 4447` | 0 | new pid 219946; unauth / 401; /login 200; authed root 200; served index-BV48gH_b.js (old was index-CAzbSeqL.js); bundle grep: lastPrompt + text-text-secondary present; log clean |
+| 2026-09-12 10:50 | s016 | app | edit `home-sessions-table-controller.tsx` — concurrency-limited preview prefetch (limit 20, concurrency 3) for all table records via `useServerSync().session.prefetch/shouldPrefetch`; edit `home-sessions-table.tsx` — row shows real last prompt subtitle (`sessionLastPrompt`) under title | 0 | FU-031 implementation (real prompt in home Sessions tab) |
+| 2026-09-12 10:55 | s016 | verify | `bun run typecheck` (packages/app) | 0 | pass |
+| 2026-09-12 10:56 | s016 | verify | `bun run test:unit` (packages/app) | 0 | 737 pass / 0 fail |
+| 2026-09-12 10:59 | s016 | build | `./scripts/build-linux.sh` (bun 1.3.14) | 0 | 0.0.0-dev-202609120259; smoke ok |
+| 2026-09-12 11:00 | s016 | deploy | kill pid 219946; `./scripts/run-web.sh 4447` | 0 | new pid 248812; authed root 200; served index-DhhfqPa8.js; bundle grep: home-session-row-prompt + lastPrompt present; log clean |
+| 2026-09-12 12:40 | s018 | explore | toolchain check: bun 1.4.2 installed vs pinned 1.3.14; build-linux.sh pins 1.3.14 (DEC-016/DEC-015) | 0 | Must build with pinned bun 1.3.14 |
+| 2026-09-12 12:50 | s018 | app | edit `packages/app/src/pages/home/home-sessions-table.tsx` — HomeSessionTableRow → 3-line mobile card (items-start; title 2-line clamp + time top-right; project muted line w/ v2 folder icon; prompt preview 2-line clamp) + import Icon v2 | 0 | FE-007 markup change shipped |
+| 2026-09-12 12:52 | s018 | verify | `bun run typecheck` (packages/app) | 0 | pass |
+| 2026-09-12 12:53 | s018 | verify | `bun x oxlint packages/app/src/pages/home/home-sessions-table.tsx` | 0 | 0 warnings / 0 errors |
+| 2026-09-12 12:54 | s018 | verify | `bun run test:unit` (packages/app) | 0 | 737 pass / 0 fail |
+| 2026-09-12 13:35 | s018 | build | `./scripts/build-linux.sh` (pinned bun 1.3.14) | 0 | 0.0.0-dev-202609120534; smoke ok |
+| 2026-09-12 13:38 | s018 | deploy | kill pid 248812; `./scripts/run-web.sh 4447` | 0 | new pid 305738; unauth / 401 (FE-001 login active); server log clean; binary grep: `items-start justify-between gap-3` present → FE-007 markup compiled in |
+| 2026-09-12 13:45 | s018 | docs | write s018 record (`20-logs/sessions/2026-09-12_s018_home-sessions-row-mobile-card.md`), p003 `sessions/fe-007-home-sessions-row.md`, update p003 README (FE-007), current-state.md (s018 addendum), open-followups (FU-028 scope + FU-032), decisions-log.md (DEC-020) | 0 | Bookkeeping complete |

@@ -2,8 +2,11 @@
 
 **Project:** Vendor the **opencode** source (`github.com/anomalyco/opencode`, MIT), modify it, and build our own
 Linux binary instead of relying on prebuilt releases.
-**Status:** 🟢 MODIFIED + SELF-BUILT + SERVING (s007) — **FE-001** cookie-auth login, **FE-002** project
-selector fix, **FE-003** foreground re-sync, **FE-004** @pierre/trees folder explorer on mobile all live.
+**Status:** 🟢 MODIFIED + SELF-BUILT + SERVING — **FE-001** cookie-auth login, **FE-002** project
+selector fix, **FE-003** foreground re-sync, **FE-004** folder explorer on mobile, **FE-006** session-list
+last-prompt subtitle, **FE-007** home Sessions-tab row → mobile-first multi-line card.
+**Deployed** s018: 0.0.0-dev-202609120534 (pid 305738) — FE-007 (home Sessions row: 2-line title clamp,
+top-right time, project name + folder icon line, prompt preview 3rd line).
 Web UI on http://192.168.1.249:4447/ (cwd `p003-opencode-fork`).
 **Source:** `opencode/` — vendored clone (git-ignored as a nested repo; never commit it to the ide repo).
 
@@ -122,6 +125,53 @@ OPENCODE_SERVER_PASSWORD=<pw> setsid nohup ../opencode/packages/opencode/dist/op
   the login shell (`hahahaha`? verify), i.e. **the same credentials as the old :4445 instance**.
 - **Security note:** `oc_creds` is the base64-encoded credential (readable if stolen, effective only when
   copied — http LAN). Same trust model as the Basic auth it replaces. Do not expose LAN ports to the internet.
+
+## FE-006 — Session-list subtitle: last user prompt in the sidebar (DONE, s016–s017; deployed 0.0.0-dev-202609120259)
+
+**Problem:** in the workspace sidebar, each session row shows only its title — no hint of what it was
+about / where it left off.
+
+**Fix (client-only, `packages/app`):** each session row now shows a one-line **last prompt** preview
+under the title:
+- `utils/session-last-prompt.ts` (new) — walks the session's messages newest-first, takes the newest
+  **user** message with a real (non-synthetic/non-ignored) text part, normalizes whitespace.
+- `pages/layout/sidebar-items.tsx` — `SessionItem` computes the preview via a reactive memo off the
+  existing message store; `SessionRow` renders the subtitle (hidden for `dense` rows) and enriches the
+  row tooltip with `title\nprompt`.
+- `pages/layout.tsx` — **bulk async prefetch**: when the session list renders, ALL visible sessions are
+  queued for a small prefetch (20 messages each, ≤25/folder, 2 concurrent), so every listed row gets a
+  subtitle shortly after open; hover still upgrades a session to full (200) history. Queue items now
+  carry `{ id, limit, keep }`.
+- **Home Sessions tab (FU-031):** same `sessionLastPrompt` extraction now backs the starting screen's
+  session table — each row shows the real last user prompt under the title (per-row preview prefetch,
+  20 msgs, 3 concurrent, in `home-sessions-table-controller.tsx`). No more `session.title` proxy.
+- No server/DB/API change: relies on the existing session **prefetch** path already filling the message
+  store for listed sessions.
+
+**Verify:** `bun run typecheck` ✅, `bun run test:unit` ✅ (737 pass). **Deployed:** 0.0.0-dev-202609120259
+(pid 248812), served entry `index-DhhfqPa8.js` contains `home-session-row-prompt` + `lastPrompt`.
+
+**Notes:** `sessions/fe-006-session-list-last-prompt.md`
+
+## FE-007 — Home Sessions-tab row: mobile-first multi-line card (DONE, s018; deployed 0.0.0-dev-202609120534)
+
+**Problem:** the starting screen's session row was a one-line strip — fixed project column (112–160px)
+ate half a phone's width, and title/prompt were single-line truncated so long prompts vanished.
+
+**Fix (client-only, `packages/app`):** `pages/home/home-sessions-table.tsx` `HomeSessionTableRow`
+redesigned as a 3-line stacked card (`items-start`):
+1. **Title** `flex-1` clamped to **2 lines** + **relative time top-right** (no fixed 64px reserved).
+2. **Project name** (was fixed-width column) → small muted line under the title with the v2 **folder**
+   icon; single-line truncate.
+3. **Last prompt** (FE-006) → third line, **2-line clamp**, only when present.
+Multi-line via inline `-webkit-line-clamp:2` / `-webkit-box-orient:vertical` (pattern already used in
+the question dock).
+
+**Verify:** `bun run typecheck` ✅, `bun x oxlint` ✅ (0/0), `bun run test:unit` ✅ (737 pass). Built
+with pinned bun **1.3.14** (DEC-015) → `0.0.0-dev-202609120534` (pid 305738). Binary grep confirms new
+markup shipped.
+
+**Notes:** `sessions/fe-007-home-sessions-row.md`
 
 ## Vendored clone state
 
