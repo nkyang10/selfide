@@ -5,8 +5,15 @@ Linux binary instead of relying on prebuilt releases.
 **Status:** 🟢 MODIFIED + SELF-BUILT + SERVING — **FE-001** cookie-auth login, **FE-002** project
 selector fix, **FE-003** foreground re-sync, **FE-004** folder explorer on mobile, **FE-006** session-list
 last-prompt subtitle, **FE-007** home Sessions-tab row → mobile-first multi-line card.
-**Deployed** s018: 0.0.0-dev-202609120534 (pid 305738) — FE-007 (home Sessions row: 2-line title clamp,
-top-right time, project name + folder icon line, prompt preview 3rd line).
+**Deployed** s028: 0.0.0-dev-202609130745 (pid 1086348) — **FE-011 slim live-reply fix**: the new
+`<title> (N)` session now **registers client-side** (passes `location:{directory}` on create +
+`serverSync().session.remember` + child store insert, mirroring the normal new-session `seed`) so the
+seeded summary and fresh messages get a **live** assistant reply instead of only after a reload.
+Previous: s027 (0.0.0-dev-202609130611) fixed the compact-summary-seeds-into-new-tab race
+(poll-for-summary + loading/success toasts); s026 added **FE-012** right-click context menu
+(Rename + Close Tab) on new/draft (unstarted) session tabs (0.0.0-dev-202609130518).
+**FE-008** (fullscreen chat-height) and **FE-009** (drag-down action menu) are **code-complete but not yet
+deployed** (FU-033/FU-034 — plan a single rebuild+deploy).
 Web UI on http://192.168.1.249:4447/ (cwd `p003-opencode-fork`).
 **Source:** `opencode/` — vendored clone (git-ignored as a nested repo; never commit it to the ide repo).
 
@@ -173,6 +180,59 @@ markup shipped.
 
 **Notes:** `sessions/fe-007-home-sessions-row.md`
 
+## FE-009 — Drag-down action menu on the agent chat tab bar (DONE, s020; not yet deployed — FU-034)
+
+**Problem:** on mobile there was no quick, thumb-reachable way to reload the app or log out from the chat
+view — you had to leave the session flow.
+
+**Fix (client-only, `packages/app`):** drag **down** from the top agent-chat tab-bar background to open a
+small action menu.
+1. **Reload** — `window.location.reload()`; new `common.reload` i18n key added to all 62 dict files.
+2. **Logout** — reuses `sidebar.logout`/`sidebar.logoutConfirm` (FE-001 flow): `window.confirm` → `/logout`.
+
+Extensible by design: `DragDownMenu` takes a `DragDownAction[]` (`id`, `labelKey`, `icon` (IconV2),
+`onSelect`, optional `confirmKey`) — adding an action is one array entry in `titlebar-tab-strip.tsx`.
+
+Key engineering:
+
+- **Gesture safety:** pure pull state machine (`drag-down-gesture.ts`) arms only on **downward dominance**
+  (`dy>10 && dy>1.5×|dx|`) from **strip background** (skips tabs/buttons/links), so it never fights the
+  @dnd-kit horizontal tab drag/reorder.
+- **Styling reuse:** v2 menu CSS via `data-component="menu-v2-content"` / `"menu-v2-item"` /
+  `data-slot="menu-v2-item-content"` (no Kobalte anchor).
+- **CSS traps solved:** icons in `item-content` (indicator slot hides `svg` unless `[data-checked]`); outer
+  positioning div keeps the `-translate-x-1/2` off the `menu-v2-content` surface so it can't clash with the
+  `menu-v2-in` scale animation; menu flips above on low viewports.
+
+**Verify:** `tsgo -b` clean; unit 11+11+11 green; `bun run build` (production vite) ✅. Deploy pending FU-034.
+**Notes:** `sessions/fe-009-drag-down-action-menu.md`
+
+## FE-012 — Right-click context menu on new/draft session tabs (DONE, s026)
+
+**Problem:** the native right-click context menu (**Rename** + **Close Tab**) existed only on started
+chat-session tabs (`TabNavItem`); new/draft tabs (`DraftTabItem`, session not yet started) had no
+menu at all.
+
+**Fix (client-only, `packages/app`):** give `DraftTabItem` the same `MenuV2.Context` (Kobalte
+ContextMenu) with the two items.
+- **Close Tab** → existing `onClose` (flush through the s021 close-confirm dialog).
+- **Rename** → inline contenteditable title editing (Enter saves, Esc/blur cancels, mirrored from
+  `TabNavItem`); persisted per-draft via the new `tabs.rememberDraftTitle` →
+  `TabInfo[tabKey].title`. The tab shows the custom name instead of the "New session" fallback;
+  clearing it restores the fallback.
+
+**Key engineering:**
+- Draft title read from `tabs.info[id]?.title` in `titlebar-tab-strip.tsx` (fallback
+  `command.session.new`); `onRename` threaded `DraftTabSlot → DraftTabItem`.
+- `data-editing` + `select-none`/`select-text` gating mirrors `TabNavItem` so drag/reorder/preview
+  never start while renaming; Kobalte ContextMenu trigger keeps the `div[role=link]` fix from s025
+  (no `href` → iOS long-press stays JS-driven).
+- Draft rename keys off `draft:<draftID>` — the same key `removeInfo`/promote cleanup already use.
+
+**Verify:** `tsgo -b` clean; `tabs.test.ts` 12/12 green; full build
+`0.0.0-dev-202609130518`.
+**Notes:** `sessions/fe-012-draft-tab-context-menu.md` (FU-041 = on-device check)
+
 ## Vendored clone state
 
 - Cloned: 2026-09-08 (s003) from `https://github.com/anomalyco/opencode.git`
@@ -185,5 +245,6 @@ markup shipped.
 ## References
 
 - Decisions: DEC-010 (fork project), DEC-011 (FE-001 login/cookie design), 2026-09-08
-- Follow-ups: FU-018 (first modification) ✅ done via FE-001; FU-020 (user verify on iOS + iterate)
+- Follow-ups: FU-018 (first modification) ✅ done via FE-001; FU-020 (user verify on iOS + iterate);
+  FU-033/FU-034 (FE-008 + FE-009 deploy, single rebuild)
 - Runtime notes: `notes/build-runtime.md`

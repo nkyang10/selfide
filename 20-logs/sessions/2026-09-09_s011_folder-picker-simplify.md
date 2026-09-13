@@ -25,5 +25,11 @@ Two tweaks to the mobile folder picker (`dialog-select-directory-v2.tsx`).
   → 25 pass, 0 fail.
 
 ## Status
-Code committed? NO (not requested). Not yet deployed/rebuild.
-P0: follow original FE-004 notes: rebuild + redeploy + iPhone field test (was FU-023).
+Code committed? NO (local uncommitted changes). 
+- 00:39 UTC Sep 11 (session continues): rebuilt + deployed `0.0.0-dev-202609101639` (bun 1.3.14)
+  to :4447 pid 3453286. The prior deployed instance (2790696) had CRASHED — log ended with
+  `MaxListenersExceededWarning: Possible EventTarget memory leak detected. 11 event listeners...`
+  after ~6h, killing the tunnel origin (tunnel itself never expired; cloudflared stayed up,
+  returned 502 until server restarted). Rebuild+restart fixed it. Verified localhost/LAN/tunnel
+  all 200 with `opencode:hahahaha`; tunnel URL unchanged (orlando-expansion-thu-toxic).
+  TODO: root-cause the MaxListeners leak (suspected SSE/EventTarget accumulation).

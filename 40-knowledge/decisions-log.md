@@ -394,3 +394,46 @@ Format:
   change — pure markup; verified by typecheck + oxlint + 737 unit tests and built with the pinned bun
   1.3.14 (DEC-016). **Revisit:** if a future compact list view is wanted (e.g. many rows scrolling fast),
   add a CSS density toggle rather than reintroducing the fixed project column.
+
+### DEC-021 — p003 fork: `visual_model` config key for image-message fallback (2026-09-12, s023)
+- **Decision:** add a top-level `visual_model` config key (`provider/model`, mirrors `small_model`)
+  to the p003 opencode fork. At each turn (`session/prompt.ts` per-turn `getModel` interception), if
+  the active model's `capabilities.input.image === false` and the **last user message** carries a
+  `file` part with an `image/*` mime or `data:image/` url, substitute `provider.getVisualModel()`
+  for that turn only. The assistant message's stored `providerID/modelID` and the LLM processor use
+  the visual model; the session's stored default model is never mutated.
+- **Rationale:** Hermes-class models declare no vision (`attachment:false`,
+  `modalities.input:["text"]`); a global fallback key lets users keep the cheap model as default
+  while still answering image prompts. Substitution at the per-turn model site (prompt.ts ~L1141)
+  is the single clean interception point; `getVisualModel` mirrors `getSmallModel` (config → parse →
+  `getModel`, `undefined` when `visual_model === cfg.model` or the model doesn't exist — silent no-op).
+- **Key facts:**
+  - `config/v1/config/migrate.ts` `keys` set deliberately NOT extended — `visual_model` never existed
+    in legacy V1 files, and adding it would misdetect modern configs and drop the key during `migrate()`.
+  - Client capability mapping already exposes `capabilities.input.image` (global-sync/utils.ts).
+- **Verified:** typecheck clean (core + opencode); end-to-end on the fork over HTTP —
+  image message + `dgx/general` → `dgx-vision/vision-model-default`; text-only follow-up → stays
+  `dgx/general`; session model untouched. Config lives in global `~/.config/opencode/opencode.jsonc`.
+- **Revisit when:** supporting non-last-user historical image context (a text follow-up referencing an
+  earlier image still routes to the non-vision model — current scope is "image-bearing turns" only).
+
+### DEC-022 — Dialog/DialogV2 shells render only when open (2026-09-13)
+- **Decision:** in the p003 opencode fork, gate the shell divs of both `Dialog` components —
+  `packages/ui/src/v2/components/dialog-v2.tsx` and legacy `packages/ui/src/components/dialog.tsx` —
+  on `useDialogContext().isOpen()` via `<Show when={...}>`. Closed dialogs no longer emit the
+  `fixed inset-0` container + centered `dialog-container` box into the DOM.
+- **Rationale:** the shells rendered unconditionally; only the inner `Kobalte.Content` was gated
+  by the Root's open state. The per-tab close-tab confirm dialog (`titlebar-tab-nav.tsx:394`,
+  mounted under `data-titlebar-tab-slot`) therefore always displayed an empty opaque centered box
+  (z-50, `pointer-events:auto`) after login, blocking the middle of the view. Playwright
+  `elementFromPoint` at screen-center returned the empty container — proof it was the blocker.
+  Gating on the context's `isOpen` (Kobalte 0.13.11) is available in every current usage (local
+  `Root` and portal DialogContext), and `isOpen` stays true through the closing transition so the
+  exit animation is preserved.
+- **Alternatives rejected:** app-level `Show when={confirmCloseOpen()}` around just the close-tab
+  dialog — would fix the reported case but leave the same latent bug in the shared
+  Dialog components for any future always-mounted dialog.
+- **Consequences / revisit when:** while closed, `[data-component="dialog-v2"]` / `"dialog"` no
+  longer exist in the DOM; code must not depend on their presence when closed. No transitions
+  affected (Kobalte keeps `isOpen=true` while animating out). The `useDialogContext` hook throws
+  if used outside a Kobalte Root — all current `Dialog` usages are inside one.

@@ -238,3 +238,86 @@
 | 2026-09-12 13:35 | s018 | build | `./scripts/build-linux.sh` (pinned bun 1.3.14) | 0 | 0.0.0-dev-202609120534; smoke ok |
 | 2026-09-12 13:38 | s018 | deploy | kill pid 248812; `./scripts/run-web.sh 4447` | 0 | new pid 305738; unauth / 401 (FE-001 login active); server log clean; binary grep: `items-start justify-between gap-3` present → FE-007 markup compiled in |
 | 2026-09-12 13:45 | s018 | docs | write s018 record (`20-logs/sessions/2026-09-12_s018_home-sessions-row-mobile-card.md`), p003 `sessions/fe-007-home-sessions-row.md`, update p003 README (FE-007), current-state.md (s018 addendum), open-followups (FU-028 scope + FU-032), decisions-log.md (DEC-020) | 0 | Bookkeeping complete |
+| 2026-09-12 14:10 | s019 | explore | reproduce: analyze session chat page height chain (index.html #root h-dvh → index.css standalone override 100vh) | 0 | Root cause: `@media (display-mode: standalone) #root { height:100vh }` overrides h-dvh; on mobile fullscreen 100vh = large viewport > visible screen → overflow. Not related to FE-006 |
+| 2026-09-12 14:12 | s019 | app | edit `packages/app/src/index.css` — standalone #root: `100vh` → `100svh; 100dvh` (keep edge-to-edge intent, clamp to visible screen) | 0 | FE-008 proposed; CSS-only |
+| 2026-09-12 14:40 | s020 | app | write `packages/app/src/components/drag-down-gesture.ts` (pure pull state machine: PULL_THRESHOLD=56, ARM_DISTANCE=10, AXIS_FACTOR=1.5) + `drag-down-gesture.test.ts` | 0 | FE-009; 6 tests pass (arm/reset/threshold/axis dominance) |
+| 2026-09-12 14:45 | s020 | app | write `packages/app/src/components/drag-down-menu.tsx` (DragDownMenu + DragDownAction; pointer capture + makeEventListener; menu-v2 data-attrs) | 0 | FE-009; icons in item-content not indicator slot; outer positioning div avoids transform clash |
+| 2026-09-12 14:50 | s020 | app | edit `packages/app/src/components/titlebar-tab-strip.tsx` (import DragDownMenu; dragActions = reload+logout; wrap tabs in DragDownMenu class="relative min-w-0") | 0 | FE-009 wired at integration point |
+| 2026-09-12 14:55 | s020 | i18n | `/tmp/opencode/add-i18n-key.cjs` insert `common.reload` after `common.open` (en + 61 locales, 62 dicts) | 0 | in all 62 dicts; parity preserved |
+| 2026-09-12 15:00 | s020 | verify | `tsgo -b` (packages/app, via bun shim PATH) | 0 | typecheck clean, no output |
+| 2026-09-12 15:05 | s020 | verify | `bun test` drag-down-gesture.test.ts (6) + i18n/parity.test.ts (5) | 0 | 11 pass (gesture 6 + parity 5); titlebar/session suites green earlier |
+| 2026-09-12 15:10 | s020 | verify | `~/.bun/bin/bun run build` (packages/app) | 0 | production vite build OK; bundle index-D9tRSA9c.js contains `drag-down` + `common.reload` |
+| 2026-09-12 15:15 | s020 | docs | update session record s020 addendum, command-log, current-state.md, open-followups FU-034 | 0 | bookkeeping complete; not deployed (FU-034) |
+| 2026-09-12 07:54 | s021 | app | explore titlebar-tab-nav/strip + DialogV2 + ButtonV2 + i18n keys (read-only) | 0 | confirmed TabNavItem.closeTab wiring, dialog components, parity-guaranteed keys (common.closeTab/cancel/close, ui.common.confirm) |
+| 2026-09-12 08:02 | s021 | app | edit titlebar-tab-nav.tsx: confirmCloseOpen signal + closeTab() opens dialog (was props.onClose) | 0 | FE-010; all close paths now route through confirm: menu item, onAuxClick middle-click |
+| 2026-09-12 08:10 | s021 | app | edit titlebar-tab-nav.tsx: long-press handlers (500ms timer, >10px move cancels, drag/edit guards) + touch contextmenu suppression | 0 | play with touch/mouse long-press; native mobile contextmenu blocked while dialog pending/open |
+| 2026-09-12 08:20 | s021 | app | edit titlebar-tab-nav.tsx: DialogV2 confirm dialog (DialogRoot open/onOpenChange; Cancel common.cancel / Confirm ui.common.confirm; body = session title) | 0 | no new i18n keys — no locale files touched; parity preserved |
+| 2026-09-12 08:25 | s021 | verify | `bun run typecheck` (packages/app, tsgo -b) | 0 | clean |
+| 2026-09-12 08:30 | s021 | verify | `bun run lint` on titlebar-tab-nav.tsx (oxlint) | 0 | 0 errors, 6 pre-existing consistent-return warnings |
+| 2026-09-12 08:35 | s021 | verify | `bun test` titlebar-tab-gesture + titlebar-tab-order | 0 | 7 pass |
+| 2026-09-12 09:46 | s021 | fork | ./scripts/build-linux.sh (pinned bun 1.3.14) | 0 | built opencode-linux-arm64 binary 0.0.0-dev-202609120946 (184MB); smoke test --version passed |
+| 2026-09-12 09:48 | s021 | :4447 | kill 305738 (old opencode web) | 0 | port 4447 released |
+| 2026-09-12 09:48 | s021 | :4447 | OPENCODE_SERVER_PASSWORD=hahahaha ./scripts/run-web.sh 4447 | 0 | new pid 456022; `/login` 200, `/` 401, `/sw.js` 200 — FE-010 + FE-008 + FE-009 live |
+| 2026-09-12 09:50 | s021 | docs | session record s021 + current-state s021 addendum + open-followups FU-033/034 resolved, FU-035/036 added | 0 | protocol close-out complete |
+| 2026-09-12 10:05 | s022 | app | edit message-timeline.tsx: add session.slim.title i18n key + slim button (IconV2 "collapse") + slimSession handler (compact → wait → create+rename new session → navigate+focus → sendFollowupDraft) | 0 | FE-011 client-only |
+| 2026-09-12 10:06 | s022 | i18n | add session.slim.title key to en.ts + 61 locale files after session.error.serverConnection | 0 | parity test 5/5 pass |
+| 2026-09-12 10:08 | s022 | verify | `bun run --cwd packages/app typecheck` (tsgo -b) | 0 | clean |
+| 2026-09-12 10:09 | s022 | verify | `bun test` i18n/parity.test.ts | 0 | 5 pass |
+| 2026-09-12 10:10 | s022 | verify | `bun run test:unit` (packages/app, --only-failures) | 0 | 743 pass / 0 fail |
+| 2026-09-12 10:11 | s022 | verify | `bun run lint` (oxlint) | 0 | message-timeline back to 23 baseline refs; 0 new |
+| 2026-09-12 10:13 | s022 | build | `bunx vite build` (packages/app) | 0 | production bundle compiles clean |
+| 2026-09-12 10:02 | s023 | verify | `bun run typecheck` packages/core + packages/opencode (tsgo --noEmit) | 0 | clean — prior 3 errors (prompt.ts parts, fake provider) already fixed; visual_model edits intact |
+| 2026-09-12 10:05 | s023 | build | `bun run script/build.ts` (packages/opencode, bun 1.4.2) | 0 | dist `0.0.0-dev-202609121004` (176 MB) |
+| 2026-09-12 10:07 | s023 | :4447 | kill 456022 + relaunch `opencode web --port 4447` from testing/ | 0 | new pid 462232; `GET /` 200; auth user `opencode` |
+| 2026-09-12 10:33 | s023 | webapi | POST /session + POST /session/:id/message (text + image file part, model dgx/general) | 500 | every prompt on bun-1.4.2 build crashes: `TypeError undefined: (evaluating 'a.name')` at Agent.state→createUserMessage (err_* in data log) |
+| 2026-09-12 11:07 | s023 | diagnose | `bun run src/index.ts run` (source) vs `dist/... run` (binary) with dgx/general | 0 | SOURCE replies HELLO_OK; binary crashes same `a.name` → build-artifact issue, not the feature |
+| 2026-09-12 11:25 | s023 | diagnose | build `minify:false, splitting:false` → run | 0 | works (UNMIN_OK) |
+| 2026-09-12 11:29 | s023 | diagnose | build `minify:true, splitting:false (--single)` → run | 0 | works (MIN_ONLY_OK) → culprit = splitting:true under bun 1.4.x |
+| 2026-09-12 11:31 | s023 | verify | source-run `opencode web 4450` + unmin binary 4451 → image+text prompts via HTTP | 0 | image→dgx-vision/vision-model-default, text→dgx/general; unmin binary same (end-to-end feature proof) |
+| 2026-09-12 11:34 | s023 | build | revert split experiment in build.ts; `bash scripts/build-linux.sh` (pinned bun 1.3.14) | 0 | dist `0.0.0-dev-202609121134` (184 MB) — canonical toolchain |
+| 2026-09-12 11:36 | s023 | :4447 | kill 500357 + relaunch on bun-1.3.14 binary | 0 | pid 500914 live; /config returns visual_model |
+| 2026-09-12 11:38 | s023 | webapi | final e2e on :4447 bun-1.3.14 build: image prompt + text-only control | 0 | IMG→dgx-vision/vision-model-default (finish stop); text→dgx/general; session model untouched |
+| 2026-09-12 11:50 | s023 | docs | session record s023 + command-log + current-state addendum + DEC-021 + FU-038/039 | 0 | protocol close-out complete |
+| 2026-09-12 12:05 | s023 | git | `git add -A` + commit f6e27f6 (86 files: visual_model feature + FE-006..011 snapshot) | 0 | one-snapshot commit per user approval |
+| 2026-09-12 12:07 | s023 | git | `git push origin dev` (bun added to PATH for husky pre-push) | 0 | 3e46b18..f6e27f6 pushed; hook ran workspace typecheck 30/30 green |
+| 2026-09-12 12:08 | s023 | docs | command-log appended for push | 0 | close-out current-state/followups already updated |
+| 2026-09-13 03:40 | s024 | investigate | trace pasted `session-tab-popover-trigger` element → TabPreviewPopover; ruled out DragDownMenu backdrop + global Dialog provider | 0 | pasted element = titlebar-tab-nav.tsx:354 TabPreviewPopover trigger; empty content = 4 undefined Show slots |
+| 2026-09-13 03:50 | s024 | edit | add previewData() gate in titlebar-tab-nav.tsx (open+data+onOpenChange) | 0 | popover can never mount empty; auto-closes if data empties |
+| 2026-09-13 03:52 | s024 | verify | `bun run typecheck` (packages/app, tsgo -b) | 0 | clean; dist bundle index-DmrjH3C3.js (live FE line) confirms source==deployed |
+| 2026-09-13 01:12 | s024 | build | `./scripts/build-linux.sh` (bun 1.3.14 pinned) | 0 | dist `0.0.0-dev-202609121713` (184 MB); smoke --version OK; built lit |
+| 2026-09-13 01:13 | s024 | deploy | kill old pid 501753; `./scripts/run-web.sh 4447` | 0 | new pid 671053 on :4447; binary version 0.0.0-dev-202609121713 |
+| 2026-09-13 01:14 | s024 | verify | curl unauth `/`=401, `/login`=200; POST login 302 → authed `/` 200; served bundle `index-DiMJaNe3.js` md5 matches freshly-built dist (previewData fix present) | 0 | deploy verified; FE-001 auth + fix live |
+| 2026-09-13 02:30 | s024 | diagnose | Playwright repro on :4447 (fresh login + session view): scan fixed/centered elements + elementFromPoint | 0 | root cause found: empty `dialog-v2` shell (Dialog/DialogV2 ui) renders even when closed; blocks screen-center under data-titlebar-tab-slot |
+| 2026-09-13 02:35 | s024 | edit | gate `Dialog`/`DialogV2` shells on `useDialogContext().isOpen()` (dialog-v2.tsx + legacy dialog.tsx) | 0 | no rendering while closed |
+| 2026-09-13 02:40 | s024 | verify | `bun run typecheck` packages/ui | 0 | clean |
+| 2026-09-13 02:45 | s024 | build | `./scripts/build-linux.sh` (bun 1.3.14) | 0 | dist `0.0.0-dev-202609121825` (184 MB); smoke OK |
+| 2026-09-13 02:46 | s024 | deploy | kill 671053; `./scripts/run-web.sh 4447` | 0 | new pid 702293 on :4447; version 0.0.0-dev-202609121825 |
+| 2026-09-13 02:50 | s024 | verify | Playwright re-scan session view after fix | 0 | no dialog-v2, no fixed overlays; long-press close-tab confirm opens with content (關閉分頁/取消/確認) |
+| 2026-09-13 03:05 | s025 | edit | titlebar-tab-nav.tsx: `as="a"`/`<a href>` → `div[role=link]` + tabindex + key handler (2 triggers) | 0 | Safari no longer intercepts long-press on anchors; close-confirm fires; nav stays JS-driven (preventDefault) |
+| 2026-09-13 03:10 | s025 | verify | `bun x tsc --noEmit -p packages/app/tsconfig.json` | 0 | typecheck clean |
+| 2026-09-13 03:28 | s025 | verify | `bun x oxlint packages/app/src/components/titlebar-tab-nav.tsx` | 0 | 0 errors; 6 pre-existing warnings (consistent-return, unrelated) |
+| 2026-09-13 03:28 | s025 | build | `./scripts/build-linux.sh` (bun 1.3.14, build.ts --single) | 0 | dist `0.0.0-dev-202609130228` (184 MB); smoke --version OK |
+| 2026-09-13 03:31 | s025 | deploy | kill 702293; `OPENCODE_SERVER_PASSWORD=hahahaha ./scripts/run-web.sh 4447` | 0 | new pid 922207 on :4447; unauth /401, /login 200, authed / 200 |
+| 2026-09-13 03:33 | s025 | verify | served bundle `index-BKD310Bj.js` md5 == freshly-built dist (same md5 3d482ba) | 0 | anchor→div fix embedded in served UI |
+| 2026-09-13 13:10 | s026 | edit | tabs.tsx: add `rememberDraftTitle(draftID, title)` action (TabInfo.title via setInfo) | 0 | draft title persistence path exists |
+| 2026-09-13 13:11 | s026 | edit | titlebar-tab-strip.tsx: DraftTabSlot reads `tabs.info[id]?.title` fallback "New session" + threads onRename | 0 | draft title customisable |
+| 2026-09-13 13:12 | s026 | edit | titlebar-tab-nav.tsx: DraftTabItem + MenuV2.Context (Rename + Close Tab) + inline rename (mirror TabNavItem) | 0 | context menu on new/draft tabs |
+| 2026-09-13 13:13 | s026 | verify | `bun run typecheck` (app, tsgo -b, pinned bun 1.3.14) | 0 | clean (fixed closeTab event:MouseEvent→optional) |
+| 2026-09-13 13:14 | s026 | verify | `bun test --conditions=solid --preload ./happydom.ts ./src/context/tabs.test.ts` | 0 | 12 pass / 0 fail |
+| 2026-09-13 13:18 | s026 | build | `./scripts/build-linux.sh` (bun 1.3.14) | 0 | dist `0.0.0-dev-202609130518` (184 MB); smoke --version OK |
+| 2026-09-13 13:20 | s026 | deploy | kill 1005873; `OPENCODE_SERVER_PASSWORD=hahahaha ./scripts/run-web.sh 4447` | 0 | new pid 1009078 on :4447; unauth `/`=401, `/login`=200 |
+| 2026-09-13 13:21 | s026 | verify | curl unauth `/`=401, `/login`=200; log shows network access up | 0 | FE live; UI context-menu behavior awaiting on-device check |
+| 2026-09-13 06:08 | s027 | edit | i18n: add `session.slim.*` progress/success keys to en.ts + 61 locales (bun script insert after `session.slim.title`) | 0 | 62 files updated; parity intact |
+| 2026-09-13 06:09 | s027 | edit | message-timeline.tsx: slimSession → persistent loading toast + bounded poll-for-summary (40×150ms) + success toast; import dismissToast | 0 | fixes SSE race (summary read was stale → report empty → nothing sent to new tab) |
+| 2026-09-13 06:10 | s027 | verify | `bun run typecheck` (app, tsgo -b, pinned bun 1.3.14) | 0 | clean |
+| 2026-09-13 06:10 | s027 | verify | `bun test src/i18n/parity.test.ts` | 0 | 5 pass (parity 61 locales) |
+| 2026-09-13 06:10 | s027 | verify | `bun run lint` | 1 | 1 pre-existing error (e2e session-tab-switch-probe await-thenable) unrelated; 0 new |
+| 2026-09-13 06:11 | s027 | build | `bash scripts/build-linux.sh` (bun 1.3.14, build.ts --single) | 0 | dist `0.0.0-dev-202609130611` (184 MB); smoke --version OK |
+| 2026-09-13 06:11 | s027 | deploy | kill 1009078; `OPENCODE_SERVER_PASSWORD=hahahaha ./scripts/run-web.sh 4447` | 0 | new pid 1040890 on :4447; unauth /401, /login 200 |
+| 2026-09-13 06:12 | s027 | verify | served bundle: `grep session.slim.progress` in dist assets locale chunks | 0 | new keys embedded in deployed UI |
+| 2026-09-13 07:10 | s028 | diag | user report: slim new session seeds summary but no live reply (also fresh msgs); reply appears after reload | — | phone via LAN; server-side fine (DB + log show assistant reply produced) → client-side SSE render lost |
+| 2026-09-13 07:20 | s028 | diag | traced messaging: `directory-sync.data`→`server-session.data` global; `sendFollowupDraft` submits; normal new-session path `seed()`+location vs slim missing both | 0 | root cause: slim created session w/ no `location.directory` + no client-side `remember`/child insert → reply parts dropped until reload |
+| 2026-09-13 07:35 | s028 | edit | message-timeline.tsx slimSession: pass `location:{directory}` on create + `serverSync().session.remember` + child `setStore("session")` (mirror submit.ts `seed`) | 0 | new session registered client-side before submit |
+| 2026-09-13 07:40 | s028 | verify | `bun run typecheck` (app, tsgo -b, pinned bun 1.3.14) | 0 | clean (added `Session` type + `Binary` import) |
+| 2026-09-13 07:45 | s028 | build | `bash scripts/build-linux.sh` (bun 1.3.14) | 0 | dist `0.0.0-dev-202609130745` (184 MB); smoke --version OK |
+| 2026-09-13 07:45 | s028 | deploy | kill 1040890; `OPENCODE_SERVER_PASSWORD=hahahaha ./scripts/run-web.sh 4447` | 0 | new pid 1086348 on :4447; login 302, authed / 200 |

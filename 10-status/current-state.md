@@ -3,9 +3,86 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
-- **Last updated:** 2026-09-12 (UTC) — s018 FE-007 DEPLOYED: 0.0.0-dev-202609120534 (pid 305738).
-- **p003 deployed fork (current):** live at http://192.168.1.249:4447/ (pid 305738; binary
-  `0.0.0-dev-202609120534`, **built with bun 1.3.14**, includes FE-001..FE-007 + s011 + s012 + s013 + s014 + s015 + s017).
+- **Last updated:** 2026-09-13 (UTC) — **s028 deployed** fixes the remaining FE-011/FU-037 issue:
+  after slim, the new session's seeded summary appears but **no live assistant reply** (also for fresh
+  messages typed there); reply only showed after a page reload. Root cause (verified server-side: DB +
+  opencode.log show the assistant DID reply; client dropped the live stream): the slim `session.create`
+  **omitted `location:{directory}`** and the new session was **never registered client-side**
+  (normal new-session path calls `seed()` = `session.remember` + child-store insert; slim didn't), so
+  streamed parts for the fresh session hit the orphan gate in server-session.ts:1094-1107 and were
+  dropped until reload re-fetched history. **Fix** in message-timeline.tsx `slimSession`: pass
+  `location:{directory}` on create + `serverSync().session.remember(created)` + child
+  `setStore("session", …)` (mirror submit.ts `seed`). Build + deploy (bun 1.3.14): binary
+  `0.0.0-dev-202609130745` (pid 1086348, :4447). Typecheck clean. Awaiting phone on-device retest
+  (FU-037/FU-041).
+- **s027 deployed** fixes FE-011's slim button on-device bug:
+  the compact summary race (summary read from the reactive store right after `session.wait` returned
+  stale/empty → nothing was submitted to the new tab) is fixed with a bounded 40×150ms poll-for-summary
+  loop, and a persistent **loading** toast (`session.slim.progress.*`) now shows while compaction runs,
+  replaced by a **success** toast (`session.slim.success.*`) when done. i18n keys added to en + 61
+  locales. Build + deploy (bun 1.3.14): binary `0.0.0-dev-202609130611` (pid 1040890, :4447).
+  Typecheck clean, i18n parity 5/5. Awaiting on-device retest (FU-037).
+- **s026 deployed** the right-click context menu on
+  **new/draft (unstarted) session tabs** (FE). `DraftTabItem` (titlebar-tab-nav.tsx) got the same
+  `MenuV2.Context` as `TabNavItem`: **Rename** + **Close Tab**. Close Tab routes through the s021
+  confirm-dialog flow; Rename opens inline contenteditable editing (Enter saves, Esc/blur cancel) and
+  persists a custom title via the new `tabs.rememberDraftTitle` → `TabInfo[tabKey].title`, shown in
+  the tab instead of the "New session" fallback. Draft title is now read from
+  `tabs.info[id]?.title` in titlebar-tab-strip.tsx. Build + deploy (bun 1.3.14): binary
+  `0.0.0-dev-202609130518` (pid 1040890 supersedes, :4447). Typecheck clean, tabs tests 12/12 pass. Awaiting
+  on-device right-click/touch check (picked up in FU-035 field testing).
+- **s025 (deployed) — FE-010 long-press follow-up:** the tab
+  triggers rendered as anchors (`as="a"` / `<a href>`) let **iOS Safari show its native
+  link-preview/context menu on long-press** instead of the close-tab confirm dialog (browser-level
+  anchor behavior; `contextmenu` override can't stop it). **Fixed** by rendering both titlebar tab
+  triggers as `div[role=link]` + `tabindex` + keyboard handler (Enter/Space), dropping `href`
+  (navigation is JS-driven via `props.onNavigate()` + `preventDefault()` anyway). Build + deploy
+  (bun 1.3.14): binary `0.0.0-dev-202609130228` (pid 922207, :4447). Served bundle md5 matches the
+  freshly-built dist. Awaiting iOS phone field test (folded into FU-035).
+- **s024 (deployed): real fix for the post-login**
+  "empty dialog at middle of screen" blocker. Playwright repro proved the culprit was the
+  **Dialog/DialogV2 ui shells rendering even when closed** (`packages/ui/.../dialog-v2.tsx` +
+  legacy `dialog.tsx`): the per-tab close-tab confirm dialog (under `data-titlebar-tab-slot`)
+  always emitted an empty opaque centered box (z-50). **Fixed** by gating both shells on
+  `useDialogContext().isOpen()`. Also kept a defensive `previewData` gate on the tab hover
+  preview (`titlebar-tab-nav.tsx`). Rebuilt + deployed (bun 1.3.14): binary
+  `0.0.0-dev-202609121825` (was pid 702293, :4447). Verified via Playwright: no empty dialog on
+  login/session view; long-press close-tab confirm still opens filled.
+- **s023 (deployed, p003 fork): `visual_model` fallback.** New top-level config key
+- **s023 (deployed, p003 fork): `visual_model` fallback.** New top-level config key
+  `visual_model` (`provider/model`) in `packages/core/src/v1/config/config.ts` + `Provider.getVisualModel`
+  (`provider.ts`) + per-turn substitution in `session/prompt.ts` (~L1141): when the active model's
+  `capabilities.input.image === false` and the last user message has an `image/*` / `data:image/` file
+  part, that turn routes to the visual model (assistant `providerID/modelID` + processor follow it; the
+  session's stored default model is untouched). Verified end-to-end on :4447: image + `dgx/general`
+  → `dgx-vision/vision-model-default`; text-only → stays `dgx/general`. Config currently set in the
+  **global** `~/.config/opencode/opencode.jsonc` (`visual_model: "dgx-vision/vision-model-default"`).
+  Resolution of the prior stuck prompt bug: the running binary is rebuilt with bun 1.3.14 (see DEC-015 /
+  `scripts/build-linux.sh`; bun 1.4.x + `splitting:true` yields `a.name` crash → always rebuild with
+  the pinned toolchain). See `20-logs/sessions/2026-09-12_s023_visual-model-fallback.md`.
+- **FE-011 (s022, source-only):** new **slim** icon button in the agent chat header, next to the 3-dot
+  "more options" and the close-tab button (v2 `collapse` glyph, tooltip = `session.slim.title`). Clicking it:
+  1) runs `/compact` via `api.session.compact` (awaits completion via `session.wait`), 2) reads the compaction
+  summary text from the newest assistant `summary` message, 3) creates a **new** session in the same directory
+  with the same agent+model, 4) renames it to `<previous title> (N)` (lowest free N), 5) navigates/focuses the
+  new session, 6) submits the compact report as its **initial message** via `sendFollowupDraft`. i18n:
+  `session.slim.title` added to en + 61 locales. Files: `message-timeline.tsx` + i18n. Typecheck/parity/unit/build/lint green.
+- **FE-010 (s021, deployed):** long touch / long press on an agent chat tab (~500 ms, touch or mouse
+  left-button; drag/edit guarded, >10px movement cancels) opens a **confirm dialog** ("Close tab" +
+  the tab's session title, Cancel / Confirm). **All** close paths now confirm first: long-press, the
+  right-click menu "Close tab", and middle-click all route through the dialog (was: immediate close).
+  Native touch context-menu is suppressed during the long-press so it never clashes with the dialog.
+  No new i18n keys (reuses parity-guaranteed `common.closeTab`/`common.close`/`common.cancel`/
+  `ui.common.confirm`). Only file changed: `titlebar-tab-nav.tsx`. Typecheck/lint/unit green; deployed.
+- **s019 (in-progress) FE-008:** fullscreen chat-height fix applied to source (`packages/app/src/index.css`
+  standalone `#root`: `100vh` → `100svh; 100dvh`). Root cause confirmed NOT the last enhancement: the
+  `@media (display-mode: standalone) { #root { height:100vh } }` override (introduced on fork import,
+  `^ecbc6cc`) forces the mobile "large viewport" height > visible phone screen in fullscreen/installed mode.
+  **DEPLOYED** with s021 binary — awaiting phone field test (FU-035).
+- **p003 deployed fork (current):** live at http://192.168.1.249:4447/ (pid 922207; binary
+  `0.0.0-dev-202609130228`, **built with bun 1.3.14**, includes FE-001..FE-011 + s011..s024 + **s023
+  `visual_model` image-fallback feature** + **s025 Safari long-press anchor→div fix**; session auth
+  `opencode`/`hahahaha`).
   Includes **FE-001** cookie-auth login, **FE-002** project-selector fix, **FE-003 foreground re-sync,
   **FE-004 folder explorer on mobile**, **FE-005 iOS completion notifications (Web Push)**, **FE-006
   sidebar last-prompt subtitle** (session row shows the newest user prompt under the title; row tooltip
@@ -26,6 +103,16 @@
   unauthenticated `/` 401 (FE-001 intact); binary grep confirms new markup shipped; log clean. Tunnel URL unchanged
   `https://orlando-expansion-thu-toxic.trycloudflare.com`
   (ephemeral; quick tunnels buffer SSE — live streaming stays refetch-driven).
+- **FE-009 (s020, DEPLOYED with s021):** drag down from the top agent-chat
+  tab bar (`titlebar-tab-strip.tsx`) opens an extensible action menu (initial actions: **Reload**
+  `window.location.reload()`, **Logout** — reuses `sidebar.logout`/`sidebar.logoutConfirm`, `window.confirm`
+  → `/logout`). New `drag-down-menu.tsx` (extensible `DragDownAction[]`) + pure `drag-down-gesture.ts` state
+  machine (arm requires downward dominance so it never fights the dnd-kit tab drag; strip background only —
+  skips tabs/buttons). Menu styling reuses v2 `menu-v2-*` data attributes; icons render in `item-content`
+  (indicator slot hides svg unless `[data-checked]`); outer positioning div keeps `-translate-x-1/2` off the
+  `menu-v2-content` surface (avoids `menu-v2-in` scale-anim clash). New i18n key `common.reload` in all 62
+  dicts (parity preserved). Typecheck + unit tests + production `vite build` green. Same binary now live on
+  :4447 — gesture field test on phone pending (FU-035).
 - **Deploy note (s011 follow-up):** the prior instance (pid 2790696, `0.0.0-dev-202609091626`) **crashed**
   ~6h after deploy — log ended with `MaxListenersExceededWarning: Possible EventTarget memory leak,
   11 event listeners`; tunnel returned 502 until the server was restarted (tunnel itself never expired).
@@ -196,3 +283,22 @@ A web-interface wrapper around **opencode** (`opencode serve`, HTTP REST + SSE o
   binary grep finds `items-start justify-between gap-3` (new title row markup) → change is compiled in.
 - **Follow-up:** visual check on a physical phone (FU-028 area) — confirm long titles warp to 2 lines,
   project line + folder icon render, long prompt previews wrap.
+
+## s021 addendum (FE-010 long-press close-tab + deploy of FE-008/FE-009, 2026-09-12)
+- **FE-010 DEPLOYED** (client-only, `packages/app`) as `0.0.0-dev-202609120946` (pid 456022, :4447).
+  Long touch / long press (~500ms, touch or mouse left-button; drag/edit guarded; >10px movement cancels)
+  on an agent chat tab opens a **confirm dialog** titled "Close tab" showing the tab's session title,
+  with Cancel / Confirm. **All close paths now confirm first**: the long-press gesture, the right-click
+  menu "Close tab", and middle-click all set `confirmCloseOpen` instead of closing immediately.
+  Confirm calls the existing `props.onClose()`.
+- **Touch conflict handled:** a touch long-press fires the browser `contextmenu` at ~500ms too; an
+  `onContextMenu` handler suppresses it while the long-press dialog is pending/open so it never clashes.
+- **i18n:** no new keys — reused parity-guaranteed `common.closeTab`, `common.close`, `common.cancel`,
+  `ui.common.confirm`; the dialog body shows the session title (data, not copy). No locale changes.
+- **Files:** only `packages/app/src/components/titlebar-tab-nav.tsx` (TabNavItem; DraftTabItem untouched).
+- **Verified (s021):** `tsgo -b` ✅ clean; oxlint 0 errors on file (6 pre-existing warnings);
+  titlebar gesture/order unit tests 7 pass; rebuilt fork binary `0.0.0-dev-202609120946` (pinned bun
+  1.3.14) smoke-tested; deployed to :4447 (old pid 305738 → 456022). Smoke: `/login` 200, `/` 401,
+  `/sw.js` 200. **This binary also ships FE-008 (FU-033) and FE-009 (FU-034)** — both resolved.
+- **Follow-up:** FU-035 phone field test (long-press dialog, desktop right/middle-click confirm, FE-008
+  fullscreen height + FE-009 drag-down menu sanity), FU-036 stale e2e cleanup (cross-server-tab-close).
