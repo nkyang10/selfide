@@ -321,3 +321,52 @@
 | 2026-09-13 07:40 | s028 | verify | `bun run typecheck` (app, tsgo -b, pinned bun 1.3.14) | 0 | clean (added `Session` type + `Binary` import) |
 | 2026-09-13 07:45 | s028 | build | `bash scripts/build-linux.sh` (bun 1.3.14) | 0 | dist `0.0.0-dev-202609130745` (184 MB); smoke --version OK |
 | 2026-09-13 07:45 | s028 | deploy | kill 1040890; `OPENCODE_SERVER_PASSWORD=hahahaha ./scripts/run-web.sh 4447` | 0 | new pid 1086348 on :4447; login 302, authed / 200 |
+| 2026-09-14 03:00 | s030 | diag | user request: make current dev version read the same sqlite as official main | — | identified DB filename from build channel: database.ts path() → latest/beta/prod→opencode.db, else opencode-<channel>.db |
+| 2026-09-14 03:05 | s030 | diag | `/proc/<pid>/fd` inspection for :4447 (pid 1102064) and :4445 (pid 3899250) | 0 | :4447→opencode-mark-dev.db, :4445→opencode.db (1.0GB) — confirmed split |
+| 2026-09-14 03:10 | s030 | diag | confirmed build channel: dist package.json `0.0.0-mark-dev-202609130834`; build-linux.sh pins `OPENCODE_CHANNEL=mark-dev` deliberately to avoid sharing SQLite | 0 | separate-DB is a recorded design decision (build-linux.sh comment) |
+| 2026-09-14 03:15 | s030 | decision | user confirmed via prompt: **stop, don't change anything** | 0 | NO code/build change. Both processes keep own DB. Session recorded s030. |
+| 2026-09-13 18:40 | s031 | skill | `ls .opencode/skills/` + `cat serper.py` + `cat ~/.config/opencode/opencode.jsonc` | 0 | confirmed web-research is workspace-only; key in ~/.bashrc:137 after interactive guard |
+| 2026-09-13 18:45 | s031 | diag | `grep SERPER_API_KEY ~/.bashrc` + `bash -ic` vs `bash -c 'source'` | 0 | interactive shell sees key; non-interactive (agent bash) does NOT — root cause of "env var not set" |
+| 2026-09-13 18:50 | s031 | fix | edited `~/.bashrc`: moved `export SERPER_API_KEY=…` above interactive guard (line 13); removed dup at old line 137 | 0 | single source of truth; no secret in repo |
+| 2026-09-13 18:52 | s031 | fix | edited `.opencode/skills/web-research/storage/serper.py`: added `_load_key_from_bashrc()` + `_get_key()` fallback (env wins, else parse ~/.bashrc) | 0 | script now self-loads key; verified `env -u SERPER_API_KEY python3 serper.py …` → real results exit 0; env-var path still wins |
+| 2026-09-13 18:55 | s031 | skill | `mkdir -p ~/.config/opencode/skills/web-research/storage` + `cp` SKILL.md + serper.py; rewrote SKILL.md (aggressive real-data-first description) | 0 | global skill live; project copy synced |
+| 2026-09-13 18:58 | s031 | verify | `cd /tmp && env -u SERPER_API_KEY python3 ~/.config/opencode/skills/web-research/storage/serper.py "latest opencode version" --fresh month` | 0 | real results from foreign cwd, key self-loaded — global skill works in any project |
+| 2026-09-14 07:40 | s032 | research | read fork source: `plugin/loader.ts`, `plugin/index.ts:88-124`, `config/plugin/external.ts:58-70`, `plugin/src/index.ts:56-66` | 0 | confirmed external-plugin kickoff hook: `export default async (input)=>hooks`, input has client/directory/$ ; glob `<config>/{plugin,plugins}/*.{ts,js}` |
+| 2026-09-14 07:50 | s032 | skill | `mkdir -p ~/.config/opencode/plugin` + wrote `kickoff.ts` (ensure skills dir, seed starter-kit, promote web-research; idempotent+best-effort) | 0 | plugin authored |
+| 2026-09-14 07:55 | s032 | verify | `~/.bun/bin/bun -e 'import kickoff.ts; default(fakeInput)'` x2 | 0 | run1: skills dir ok, starter-kit **created**, web-research present; run2 (idempotency): present/present — no overwrite |
+| 2026-09-14 07:57 | s032 | verify | fresh `opencode serve --port 4498` (1.18.23) + `curl -u opencode:testpass /skill` | 0 | **PROOF**: skill list = customize-opencode + web-research + **starter-kit** — real loader picked up `~/.config/opencode/plugin/kickoff.ts` and registered the seeded skill |
+| 2026-09-14 07:58 | s032 | cleanup | `pkill 'opencode serve --port 449[89]'` ; `curl / :4447` | 0 | test servers stopped (0 left); production :4447 alive (unauth 401 = auth gate intact) |
+| 2026-09-14 06:00 | s029 | research | serper (SERPER_API_KEY from ~/.bashrc) x2: Solid directory-picker libs + zag tree-view | 0 | winner: **Zag.js TreeView** (@zag-js/solid+@zag-js/tree-view 1.43.3) — Solid-native, lazy load, WAI-ARIA, no shadow DOM; see 40-knowledge/directory-picker-lib-options.md |
+| 2026-09-14 06:05 | s029 | deps | edited root package.json workspaces.catalog + packages/app/package.json (+@zag-js/core/solid/tree-view/collection, -@pierre/trees) | 0 | catalog pinned @zag-js/* = 1.43.3; app deps via `catalog:` |
+| 2026-09-14 06:12 | s029 | code | wrote packages/app/src/components/directory-tree-zag.tsx (Zag TreeView: lazy loadChildren via file.list, expand/select/reset/reveal api) | 0 | new all-in-one tree widget, plain DOM |
+| 2026-09-14 06:15 | s029 | code | rewrote dialog-select-directory-v2.tsx: dropped @pierre/trees FileTree + shadow-root scroll hack; kept TextInputV2 path input + suggestions + mid-level reveal | 0 | reveal() now drives treeApi.reveal(ancestor values) → Zag lazy-expands each ancestor then selects leaf |
+| 2026-09-14 06:16 | s029 | code | dialog-select-directory-v2.css .directory-picker-v2-tree → Zag row/chevron styles | 0 | role=treeitem + aria-selected selectors |
+| 2026-09-14 06:17 | s029 | code | rm packages/app/src/components/pierre-tree.test.ts (obsolete @pierre/trees test) | 0 | cleaned |
+| 2026-09-14 06:20 | s029 | verify | bun run typecheck (packages/app) | 0 | clean |
+| 2026-09-14 06:22 | s029 | verify | bun test src/components/directory-picker*.test.ts + full test:unit | 0 | 24/24 + **742 pass 0 fail** |
+| 2026-09-14 06:24 | s029 | verify | oxlint on changed files | 0 | 0 errors (2 pre-existing warnings in dialog) |
+| 2026-09-14 06:26 | s029 | verify | packages/app vite build | 0 | bundles; zag code present in lazy chunk, pierre gone |
+| 2026-09-14 06:28 | s029 | build | scripts/build-linux.sh (bun 1.3.14) | 0 | **0.0.0-mark-dev-202609132217** (184 MB) |
+| 2026-09-14 06:30 | s029 | deploy | kill 1102064; export OPENCODE_SERVER_PASSWORD=hahahaha; scripts/run-web.sh 4447 | 0 | PID 1554390 live :4447 |
+| 2026-09-14 06:35 | s029 | code | hardened directory-tree-zag reveal(): setCollection(buildCollection()) syncs root before expanding | 0 | fixes stale-root race (navigate→reveal) |
+| 2026-09-14 08:12 | s029 | build | scripts/build-linux.sh (bun 1.3.14) | 0 | **0.0.0-mark-dev-202609140012** (184 MB) |
+| 2026-09-14 08:14 | s029 | deploy | kill 1554390; scripts/run-web.sh 4447 | 0 | PID 1557456 live :4447; grep bin confirms Zag bundled, @pierre/trees absent |
+| 2026-09-14 10:40 | s033 | code | edit packages/app/src/pages/session/composer/session-composer-controls.ts: add bootstrapProject() to selectProject()/addProject() so a brand-new folder is initGit'd + child-registered on the server | 0 | fixes "select new folder as project → prompt not sent to LLM" (orphaned global-project scope) |
+| 2026-09-14 10:42 | s033 | verify | packages/app tsgo -b typecheck | 0 | clean |
+| 2026-09-14 10:44 | s033 | verify | bun test workspace-controller.test.ts + submit.test.ts | 0 | 4 pass / 1 pre-existing fail (submit.test.ts `toaster` import, unrelated) |
+| 2026-09-14 08:25 | s032 | code | edit draft-store.ts blobID: guard crypto.subtle (isSecureContext) with FNV-1a fallback; same fix in session-ui v2 blobReference | 0 | fixes image attach on LAN HTTP (insecure ctx) — upstream issue #11452 |
+| 2026-09-14 08:27 | s032 | verify | packages/app tsgo -b typecheck | 0 | clean |
+| 2026-09-14 08:28 | s032 | verify | bun test attachments.test.ts (app) | 0 | 10 pass / 0 fail |
+| 2026-09-14 08:28 | s032 | verify | bun test session-ui v2 prompt-input | 0 | 16 pass / 0 fail |
+| 2026-09-14 08:28 | s032 | verify | bun test draft-store fallback (insecure ctx) | 0 | 1 pass / 0 fail |
+| 2026-09-14 08:29 | s032 | build | ./scripts/build-linux.sh (bun 1.3.14) | 0 | dist 0.0.0-mark-dev-202609140028 (184 MB); smoke --version OK |
+| 2026-09-14 09:06 | s032 | deploy | kill 1557456 (s029 Zag build 140012); OPENCODE_SERVER_PASSWORD=<env> run-web.sh 4447 | 0 | new pid 1586634 on :4447; /401 root, /login 200 (login page active); /proc/exe matches new bin |
+| 2026-09-14 09:14 | s029 | docs | append 40-knowledge/decisions-log.md DEC-028 (Zag TreeView adoption, @pierre/trees dropped) | 0 | decision recorded, next # was DEC-028 |
+| 2026-09-14 09:15 | s029 | docs | update 10-status/current-state.md + append FU-047 row to open-followups.md (on-device picker retest, user, due 09-15) | 0 | status + followup dated; FU-047 supersedes earlier FU-023 note |
+| 2026-09-14 09:15 | s029 | docs | update p003 README status -> FE-013 picker on Zag TreeView (build 140012) | 0 | doc parity |
+| 2026-09-14 09:16 | s029 | verify | grep live /proc/1586634/exe binary for dir-picker-root marker (drift check: pid 1557456 killed 09:06 by s032) | 0 | **DRIFT**: picker NOT live under 1557456 anymore; fork live pid 1586634 (build 140028) contains the Zag picker marker -> corrected current-state.md + FU-047 + s029 record |
+| 2026-09-14 09:16 | s029 | docs | session record closed: links section (DEC-028, FU-047, directory-picker-lib-options.md), drift note, parallel-session caveat (s033 editing same tree) | 0 | s029 close-out complete |
+| 2026-09-14 10:22 | s029-rw | verify | grep live bin (pid 1586634 / build 140028) for s029/s032/s033 markers: dir-picker-root, isSecureContext, project.initGit | 0 | all three fixes confirmed in the RUNNING binary — no rebuild/deploy needed for any of the morning's tasks |
+| 2026-09-14 10:23 | s029-rw | docs | current-state.md: s033 entry "build+deploy pending" -> done in live bin (FU-046); s032 kickoff "next restart" -> already running (server 09:06 > plugin 07:57) | 0 | drift corrected |
+| 2026-09-14 10:24 | s029-rw | docs | open-followups.md FU-046 status -> code+build+deploy done, only on-device retest (same pass as FU-047/FU-048); FU-045 status -> production running it | 0 | FU-043 closed(s030 decl), FU-044/045 closed, FU-046/047/048 open-but-deployed (user retest only) |
+| 2026-09-14 10:25 | s029-rw | docs | s033 + s032 session records updated with build-deploy verification + coordination note resolved | 0 | wrap-up complete; final report to user |

@@ -436,4 +436,164 @@ Format:
 - **Consequences / revisit when:** while closed, `[data-component="dialog-v2"]` / `"dialog"` no
   longer exist in the DOM; code must not depend on their presence when closed. No transitions
   affected (Kobalte keeps `isOpen=true` while animating out). The `useDialogContext` hook throws
-  if used outside a Kobalte Root — all current `Dialog` usages are inside one.
+   if used outside a Kobalte Root — all current `Dialog` usages are inside one.
+
+### DEC-023 — p003 fork keeps its own SQLite, separate from official main (2026-09-14, s030)
+- **Decision:** declined a request to make the current dev version read the same sqlite file
+  (`opencode.db`) as the official main opencode build. The fork continues to use its own channel-suffixed
+  DB (`opencode-mark-dev.db`). No code or build change was made.
+- **Rationale:** the separate-channel DB is a deliberate design decision, recorded directly in the
+  build script (`p003-opencode-fork/scripts/build-linux.sh`: "Pin a distinctive channel so this fork
+  never shares SQLite state with another opencode build on the same machine"). Two live processes
+  (`:4447` dev fork, `:4445` official main) both running against one WAL SQLite file risks locking
+  conflicts and cross-build schema-migration issues. The user explicitly chose to stop and change nothing.
+- **Alternatives rejected (if revisited):** (a) code fix `database.ts:path()` to add the fork channel to
+  the ["latest","beta","prod"] set → resolves to `opencode.db`; (b) build fix, set `OPENCODE_CHANNEL=latest`
+  in the fork build → naturally drops the suffix.
+- **Consequences / revisit when:** the fork and official builds keep isolated session/account/event data.
+  If the user later insists on sharing, revisit with both processes stopped (single writer) and confirm
+  whether the fork's existing `opencode-mark-dev.db` data should be merged or discarded.
+
+### DEC-024 — Serper key: self-loaded by the skill script, not read from opencode.jsonc (2026-09-14, s031)
+- **Decision:** the `web-research` Serper fallback resolves its API key **by env var first, then by
+  reading `SERPER_API_KEY="…"` out of `~/.bashrc`/`~/.profile`**. `serper.py` gained a
+  `_load_key_from_bashrc()` + `_get_key()` fallback so the script works from the agent's
+  **non-interactive** bash tool. The key export was also moved **above** the interactive-only
+  `return` guard in `~/.bashrc` (line 6-9) so non-interactive shells inherit it too.
+- **Rationale:** the user asked for "a default skill that reads the key from `opencode.jsonc`".
+  That is **not possible**: `opencode.jsonc` only injects provider `options.apiKey` values into the
+  LLM runtime; it does NOT expose arbitrary config values to bash/skill scripts. The only supported
+  channel for a skill script to get a secret is an **environment variable**. The key was already in
+  `~/.bashrc:137` but *after* the interactive guard (`case $- in *i*)…*) return;;`), so the agent's
+  non-interactive bash tool never saw it → Serper failed with "env var not set" even though it worked
+  in the user's terminal. Fix keeps a single source of truth (`~/.bashrc`) with no secret duplicated
+  into the repo.
+- **Alternatives rejected (if revisited):** (a) hardcode key in a `.env` inside the skill dir —
+  would store a secret in the workspace (violates "no secrets in this folder"); (b) an MCP server for
+  Serper — heavier than needed for a single-key search call; (c) read `opencode.jsonc` — not possible
+  (see rationale).
+- **Consequences / revisit when:** `SERPER_API_KEY` in env always wins over the `~/.bashrc` parse.
+  The `~/.bashrc` parse is best-effort and regex-matched (first `SERPER_API_KEY=` line). If the key
+  moves to a different dotfile or a different var name, update `_load_key_from_bashrc()`. SKILL.md
+  now documents the two-step resolution so a successor agent doesn't re-diagnose the "key not set" error.
+
+### DEC-025 — web-research promoted to a GLOBAL skill with aggressive real-data-first triggering (2026-09-14, s031)
+- **Decision:** `web-research` now lives in the **global** skill dir
+  `~/.config/opencode/skills/web-research/` (SKILL.md + storage/serper.py), so it loads in **every**
+  opencode project, not just this one. The `SKILL.md` `description` was rewritten to be
+  **proactive and trigger-heavy**: it instructs the LLM to search by default for ANY question needing
+  real/current/external data (versions, prices, "latest", dates, install commands, API/library usage,
+  debugging, comparisons, who/what/when/where facts) and to **not** answer from stale memory.
+  Trigger keywords enumerated: search, look up, find out, research, check, verify, what is, latest,
+  current, how to, install, compare, release, docs, etc.
+- **Rationale:** the user wants the LLM to **always get real data** because its training is stale and
+  it should "get real data regardless of its knowledge". Skills are only triggered when the LLM
+  matches the `description` against the request, so the description is the lever — it must be loud,
+  keyword-rich, and instruct default-on behavior. Serper stays primary (self-loads the key, see
+  DEC-024); SearXNG demoted to an optional self-hosted fallback.
+- **Alternatives rejected (if revisited):** (a) keep it workspace-only (`ide` only) — would not
+  satisfy "default for everything"; (b) a dedicated `serper-search` skill — redundant, folded into the
+  rewritten `web-research`; (c) an MCP server — heavier than needed; (d) a forced slash command —
+  would bypass LLM judgment, but the user asked for the LLM to *know* when to use it, so a skill is
+  the right primitive.
+- **Consequences / revisit when:** every project's `.opencode/skills/web-research/` (e.g. this one,
+  and `gdx`'s) is now **redundant** — the global copy is authoritative. If a project needs a custom
+  variant, the local one overrides the global for that project. The aggressive description may
+  over-trigger on trivial codebase questions; the "Do NOT trigger" carve-out (pure codebase / pure
+  math) is the guard. Revisit if the LLM searches too eagerly on internal-only questions.
+
+### DEC-026 — opencode auto-creates `~/.config/opencode` (base) but NOT the `skills/` subdir (2026-09-14, s031)
+- **Decision / fact:** on every opencode start, the **base config dir** `~/.config/opencode` (plus
+  data/state/tmp/log/bin/repos under `~/.local/share/opencode`, `~/.cache/opencode`,
+  `~/.state/opencode`) is created automatically. The **`skills/` subdir is NOT** auto-created — opencode
+  only *scans* for skills and silently ignores a missing directory.
+- **Rationale (source, p003 fork, `packages/core/src`):**
+  - `global.ts:35-43` — boot runs `fs.mkdir(Path.config, { recursive: true })` (and the other base
+    dirs) on module load. `Path.config = path.join(xdgConfig, "opencode")` (`global.ts:13`).
+  - `config/plugin/skill.ts:23-33` — for each configured directory it registers a **directory source**
+    at `<dir>/skill` and `<dir>/skills` (note the singular + plural). These are *scan targets*, not
+    mkdir targets.
+  - `skill.ts:78-80` — the loader does `fs.glob("{*.md,**/SKILL.md}", { cwd: directory … })` piped to
+    `.pipe(Effect.catch(() => Effect.succeed([])))` → **missing dir = empty list, no creation**.
+- **Consequences:** the `~/.config/opencode/skills/` dir I created (s031) was made by **my `mkdir -p`**,
+  not by opencode. It will persist, but if it were deleted, the next run would **not** recreate it —
+  the global `web-research` skill would just be absent until the dir + files are re-added. The base
+  `~/.config/opencode/` dir, by contrast, is self-healing (recreated each start). Also note opencode
+  scans **both** `skill/` and `skills/` under every configured dir (and `opencode.jsonc` `skills:[]`
+  can add URL or `~/…` sources), so the global location could equally be `~/.config/opencode/skill/`.
+
+### DEC-027 — "kickoff" pre-install plugin auto-creates global skills dir + seeds a starter skill (2026-09-14, s032)
+- **Decision:** added `~/.config/opencode/plugin/kickoff.ts`, an **opencode plugin** that runs on
+  **every opencode start** (auto-loaded by the external-plugin loader, no fork rebuild). On boot it:
+  (1) `mkdir -p ~/.config/opencode/skills/` (opencode scans but never creates it — DEC-026, so this
+  makes the global skill location **self-healing**); (2) seeds
+  `~/.config/opencode/skills/starter-kit/SKILL.md` if absent — a "make opencode useful out of the box"
+  onboarding skill (real-data-first web research, repo orientation, safe defaults, verify); (3)
+  promotes the `web-research` skill (serper.py + SKILL.md) into the global dir if a source copy exists
+  on this machine and the global copy is missing. All steps **idempotent + best-effort** (never throws,
+  never overwrites user files, degrades silently).
+- **Rationale (source, p003 fork):** the cleanest user-space "on kickoff" hook is the **external
+  plugin** loader — `packages/opencode/src/plugin/loader.ts` + `index.ts`. It globs
+  `<config-dir>/{plugin,plugins}/*.{ts,js}` (`config/plugin/external.ts:58-70`) and, for the v1
+  runtime, decodes `export default` a **function** (`index.ts:88-90` `isServerPlugin =
+  typeof value === "function"`), called as `server(input, options)` whose return becomes the plugin's
+  hooks (`index.ts:123`). `input = { client, project, directory, worktree, $, serverUrl }`
+  (`packages/plugin/src/index.ts:56-66`). So a function that does its seeding and `return {}` is the
+  correct, supported shape. Chose a plugin over: (a) editing the fork to add an embedded skill —
+  requires a rebuild and touches shared code; (b) a bashrc hook — fragile, not opencode-owned; (c) a
+  plain global skill file — works but doesn't self-heal the missing `skills/` dir (DEC-026).
+- **Alternatives rejected (if revisited):** (a) an **embedded** skill in the fork
+  (`packages/core/src/plugin/skill.ts:13-31`, the `customize-opencode` pattern) — most "built-in" but
+  needs a fork rebuild + re-deploy and is machine-specific content in shared source; (b) a `bun`
+  plugin via `opencode.jsonc` `plugins:["file://…"]` — equivalent but more moving parts than a file in
+  the auto-scanned dir; (c) keep the starter skill as a plain file — fine, but then the `skills/` dir
+  still isn't auto-created.
+- **Consequences / revisit when:** `starter-kit` is now a **global default skill in every project**.
+  It is seeded (not overridden) — delete `~/.config/opencode/skills/starter-kit/` to remove the skill
+  (the plugin will re-create it on next start unless you also delete the plugin). Delete the plugin
+  with `rm ~/.config/opencode/plugin/kickoff.ts`. **Verified live**: a fresh `opencode serve` (1.18.23)
+  loaded it and `/skill` returned `customize-opencode`, `web-research`, **and** `starter-kit` — so the
+  real loader picks up `~/.config/opencode/plugin/*.ts` and the seeded skill is registered. The
+  production :4447 fork will pick it up on its next (re)start; no change made to the running process.
+
+
+### DEC-028 — Replace `@pierre/trees` web-component picker with Zag.js TreeView (2026-09-14, s029)
+- **Decision:** swapped the folder/project picker's visual browse tree in the p003 fork web UI from the
+  `@pierre/trees` **web-component `FileTree`** (beta `1.0.0-beta.4`, shadow-DOM + imperative
+  `getItem/expand/select`) to **Zag.js TreeView** (`@zag-js/solid` + `@zag-js/tree-view` 1.43.3) in
+  `packages/app/src/components/directory-tree-zag.tsx`. Kept the existing path text-input, autocomplete
+  suggestions, and the domain-layer mid-level reveal logic in `dialog-select-directory-v2.tsx`.
+- **Rationale:** the web app is **SolidJS**; the `@pierre/trees` beta widget was the fragile/buggy
+  surface (shadow-root scroll hack, `unsafeCSS`, trailing-slash `getItem` path lookups). Zag is
+  **Solid-native, framework-agnostic** (chakra-ui / Ark-backed, actively maintained), has native
+  **lazy `loadChildren`** (matches backend `file.list`), WAI-ARIA keyboard nav, programmatic
+  `expand`/`select` (for the mid-level reveal e.g. `C:\infrasys\java\jre\`), and renders plain DOM
+  with `data-state`/`aria-selected` CSS hooks. peerDependency `solid-js >=1.1.3` is compatible with the
+  app's solid 1.9.10. Decision recorded (location): `40-knowledge/directory-picker-lib-options.md`.
+- **Alternatives rejected (if revisited):** React-only trees (react-arborist, react-d3-tree,
+  react-sortable-tree) — not usable in a Solid tree; browser-native `showDirectoryPicker()` — requires a
+  secure context, unavailable on the HTTP :4447 LAN URL, and can't browse the **server** filesystem the
+  agent works in.
+- **Consequences / revisit when:** the picker renders a lazy Zag tree (no shadow DOM). If the mid-level
+  reveal or expansion UX feels off in the field, revisit the `reveal()` reveal-timing/synchronization or
+  add virtualization via `getVisibleNodes()` + `@tanstack/solid-virtual`. On-device retest pending (FU-047).
+
+### DEC-029 — New-folder project selection must bootstrap the directory server-side (2026-09-14, s033)
+- **Decision:** `createPromptProjectControls` in the p003 fork web UI (`session-composer-controls.ts`)
+  now calls a `bootstrapProject(target, worktree)` helper from `selectProject`/`addProject` when a
+  **brand-new folder** is picked as the project: if the folder has no files, `project.initGit({directory})`
+  is called; then `sync.child(directory, {bootstrap:false})[1]("project", project.id)` seeds the
+  directory as a real server project scope. Mirrors the reference Home path (`home-controller.ts:89-109`).
+- **Rationale:** before the fix, the draft path only did client-side `projects.open/touch` +
+  `tabs.updateDraft`. Server-side `Project.resolve` (`core/src/project.ts:110-122`) falls back to the
+  **global project** when the directory has no git repo, so a session created for a fresh folder was
+  scoped to the global project while the client subscribed to the directory child store → streamed
+  parts were orphaned (server-session orphan gate) and the prompt appeared to never reach the LLM.
+  Initializing the folder makes `git.repo.discover` succeed so the project resolves to its own scope.
+- **Alternatives rejected:** pre-scanning/registering every picked directory unconditionally (wasteful
+  for already-registered projects); touching the server API surface (no change needed — `initGit` +
+  `project.current` + child seeding already exist).
+- **Consequences / revisit when:** the bootstrap is fire-and-forget (non-blocking) so rapid use of a
+  brand-new folder + immediate submit could still race; if it ever shows up in the field, await the
+  bootstrap promise (or sequence `tabs.updateDraft` after it) in `selectProject`'s draft branch. Retest
+  pending (FU-046).

@@ -3,7 +3,77 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
-- **Last updated:** 2026-09-13 (UTC) — **s028 deployed** fixes the remaining FE-011/FU-037 issue:
+- **Last updated:** 2026-09-14 (UTC) — **s032 image-attach hang fixed + deployed.** Root cause: the
+  chatbox image/attachment upload runs `draftStore.putBlob` → `blobID` which called
+  `crypto.subtle.digest` (draft-store.ts:25) unconditionally. `crypto.subtle` exists **only in
+  secure contexts** (HTTPS or `localhost`); on the fork's LAN HTTP server
+  (`http://192.168.100.11:4447` etc.) it's undefined → `putBlob` threw after reading the photo
+  (~1 s "hang") and the unhandled rejection produced no thumbnail / no toast = "nothing done".
+  Matches upstream anomalyco/opencode#11452. **Fix:** `blobID` now guards
+  `crypto.subtle`+`isSecureContext` (idiom from `utils/uuid.ts`) and falls back to an FNV-1a hash;
+  same guard added to v2 `blobReference` in session-ui. Verified: app+session-ui typecheck and
+  tests clean (10+16 pass), insecure-context fallback unit-tested. **Deployed**
+  `0.0.0-mark-dev-202609140028` (bun 1.3.14), PID 1586634 on :4447, login page preserved.
+- **Last updated:** 2026-09-14 (UTC) — **s029 folder picker → Zag TreeView.** User reported the
+  project-folder selector is buggy and asked to adopt a "better, all-in-one" folder-selection library,
+  keep a **path text-input**, and allow **mid-level folder** selection (`C:\infrasys\java\jre\` → the
+  `java` folder). Replaced the fragile `@pierre/trees` **web-component `FileTree`** (beta
+  `1.0.0-beta.4`) with **Zag.js TreeView** (`@zag-js/solid`+`@zag-js/tree-view` 1.43.3,
+  Solid-native, lazy `loadChildren` from backend `file.list`, WAI-ARIA, plain DOM) in new file
+  `packages/app/src/components/directory-tree-zag.tsx`. `dialog-select-directory-v2.tsx` now drives it via
+  a slim `DirectoryTreeZagApi` (expand/select/reset/reveal); the `TextInputV2` path input + autocomplete
+  + the domain mid-level reveal logic are **kept unchanged**. Removed `@pierre/trees` + its obsolete test;
+  re-skinned the picker CSS. App typecheck clean, oxlint 0 errors, 742 unit tests pass, bundle confirmed to
+  contain Zag (`getVisibleNodes`/`getBranchProps`) with pierre gone. **Deployed** build
+  `0.0.0-mark-dev-202609140012` (bun 1.3.14), then superseded by s032's newer build
+  `140028` (same tree, includes picker). Live :4447 pid was 1557456 → now **1586634**.
+  DEC-028, FU-047. On-device poll pending.
+- **Last updated:** 2026-09-14 (UTC) — **s033 fixes FE-013**: selecting a **brand-new folder as the
+  project** on a new-session draft then typing a prompt produced **no LLM request** (no reply, no
+  toast). Root cause (verified in code): on the draft page, `createPromptProjectControls().selectProject`
+  (`session-composer-controls.ts:87-111`) only did client-side bookkeeping (`projects.open/touch` +
+  `tabs.updateDraft`) and never **bootstrapped the folder on the server**, unlike the reference
+  Home path (`home-controller.ts:89-109`). Server-side `Project.resolve` (`core/src/project.ts:110-122`)
+  discovers a git repo and falls back to the **global project ID** when the directory has none — so a
+  fresh/empty folder's session resolved to the global scope while the client subscribed to the
+  directory-scoped child store → streamed parts orphaned (server-session orphan gate). **Fix:**
+  `bootstrapProject()` added to `selectProject`/`addProject` — if the folder is new, lists files,
+  `initGit` when empty, then   `sync.child(dir,{bootstrap:false})[1]("project",project.id)` seeds the
+  server project scope (fire-and-forget; already-known projects unchanged). App typecheck clean.
+  **Now built+deployed in the live build 140028 (pid 1586634)**: binary carries `project.initGit`
+  (the bootstrap path); source edit (controls.ts 08:06) predates the 08:29 build. Only the
+  **on-device retest** remains (FU-046).
+- **Last updated:** 2026-09-14 (UTC) — **s032 kickoff pre-install plugin.** User wanted the global
+  skill(s) to be **auto-created at kickoff** so opencode is useful out of the box and the `skills/`
+  dir self-heals (DEC-026: opencode scans but never creates it). Added
+  `~/.config/opencode/plugin/kickoff.ts` — an **external opencode plugin** (auto-loaded every start by
+  the loader at `config/plugin/external.ts:58-70`; v1 shape = `export default async (input)=>hooks`,
+  `index.ts:88-124`) that on boot: (1) `mkdir -p ~/.config/opencode/skills/`, (2) seeds a
+  **`starter-kit`** onboarding skill (real-data-first web research + repo orientation + safe defaults
+  + verify), (3) promotes `web-research` into the global dir if a source copy exists. Idempotent +
+  best-effort. **Verified live**: a fresh `opencode serve` (1.18.23) loaded it and `/skill` returned
+  `customize-opencode` + `web-research` + **`starter-kit`** — real loader picks it up + seeded skill
+  registered. Production :4447 already running it: current server (pid 1586634, started 09:06)
+  booted after kickoff.ts was written (07:57). DEC-027; FU-045 resolved.
+- **Last updated:** 2026-09-14 (UTC) — **s031 global real-data skill.** User wants the LLM to
+  **always pull real/current data** (stale memory not acceptable). Promoted `web-research` to a
+  **global** skill at `~/.config/opencode/skills/web-research/` (loads in EVERY project, not just
+  `ide`/`gdx`). Rewrote `SKILL.md` with an **aggressive, trigger-heavy description** (search by
+  default for versions/prices/latest/dates/install/API/who-what-when facts; do NOT answer from
+  memory; carve-out for pure codebase/math). Serper is primary and now **self-loads its key** from
+  `SERPER_API_KEY` env else `~/.bashrc` (DEC-024) — so it works from the agent's non-interactive
+  bash tool with no setup. Verified: real results from any cwd, key self-loaded, env var still wins.
+  DEC-024 + DEC-025; FU-044 resolved. Workspace copies now redundant (global authoritative).
+- **Last updated:** 2026-09-14 (UTC) — **s030 (investigation, no change)**: user asked to make the current
+  dev version read the same sqlite (`opencode.db`) as the official main build. Diagnosed: the DB
+  filename derives from the build channel (`packages/core/src/database/database.ts:path()` —
+  `latest/beta/prod` → `opencode.db`, otherwise `opencode-<channel>.db`). The dev fork (:4447, pid
+  1102064, `0.0.0-mark-dev-202609130834`) is built with `OPENCODE_CHANNEL=mark-dev` → reads/writes
+  `opencode-mark-dev.db`; official main (:4445, pid 3899250) → `opencode.db` (1.0 GB). The separate
+  channel is a **deliberate design decision** (see `scripts/build-linux.sh` comment + DEC-023). User
+  chose to **stop, change nothing** (FU-043, DEC-023). Both processes keep their own DB. s028 deploy
+  (`0.0.0-dev-202609130745`) still the current build on :4447.
+- **s028 deployed** fixes the remaining FE-011/FU-037 issue:
   after slim, the new session's seeded summary appears but **no live assistant reply** (also for fresh
   messages typed there); reply only showed after a page reload. Root cause (verified server-side: DB +
   opencode.log show the assistant DID reply; client dropped the live stream): the slim `session.create`
@@ -177,6 +247,8 @@ A web-interface wrapper around **opencode** (`opencode serve`, HTTP REST + SSE o
 
 | Date (UTC) | Session | Change |
 |---|---|---|
+| 2026-09-14 | s032 | **Kickoff pre-install plugin** — `~/.config/opencode/plugin/kickoff.ts` (external plugin, runs every start): auto-creates `~/.config/opencode/skills/` (self-heal, DEC-026), seeds a `starter-kit` onboarding skill (real-data-first + orientation + safe defaults + verify), promotes `web-research`. Verified live: fresh `opencode serve` `/skill` returned `customize-opencode`+`web-research`+`starter-kit`. DEC-027. |
+| 2026-09-14 | s031 | **Global real-data skill** — `web-research` promoted to `~/.config/opencode/skills/web-research/` (loads in every project). Aggressive trigger-heavy description: search by default for versions/prices/latest/dates/install/API/who-what-when facts; do NOT answer from stale memory. Serper primary, self-loads key from env else `~/.bashrc` (DEC-024); SearXNG optional. FU-044 resolved. |
 | 2026-09-07 | s001 | **Project bootstrap** — full control-center structure for `ide` created; research persisted; p001 brief written. |
 | 2026-09-08 | s005 | **Engine rules changed** — 1 role at a time, no retry, timeout → park + product (DEC-011); timeout fix (`_terminate`, 7200s watchdog); marathon restarted on `20260908-0233` cycle-2 (stateful resume, pid 1722974). |
 | 2026-09-08 | s006 | **FE-003 foreground re-sync** — mobile web UI auto-refreshes on foreground: heartbeat-liveness stream resume (`server-sdk.tsx`) + forced open-session re-fetch (`directory-layout.tsx`); DEC-013; live on :4447 (pid 1949123); iOS field test pending. |

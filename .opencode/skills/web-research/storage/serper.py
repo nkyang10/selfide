@@ -16,26 +16,54 @@ Environment:
 import argparse
 import json
 import os
+import re
+import subprocess
 import sys
 import urllib.request
 import urllib.error
 
 
-SERPER_API_KEY = os.environ.get("SERPER_API_KEY")
 ENDPOINT = "https://google.serper.dev/search"
 
 
-def _require_key():
-    if not SERPER_API_KEY:
-        sys.stderr.write(
-            "Error: SERPER_API_KEY env var is not set.\n"
-            "Set it once per machine, e.g. PowerShell: setx SERPER_API_KEY \"<key>\"\n"
-        )
-        sys.exit(3)
+def _load_key_from_bashrc():
+    """Best-effort fallback: pull SERPER_API_KEY out of ~/.bashrc when the
+    agent's non-interactive shell didn't inherit it. Only runs when the env
+    var is absent, so a real env var always wins."""
+    home = os.path.expanduser("~")
+    for rc in (os.path.join(home, ".bashrc"), os.path.join(home, ".profile")):
+        try:
+            with open(rc, "r", encoding="utf-8", errors="replace") as fh:
+                content = fh.read()
+        except OSError:
+            continue
+        m = re.search(r'^\s*(?:export\s+)?SERPER_API_KEY=["\']?([A-Za-z0-9_\-]+)', content, re.M)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _get_key():
+    key = os.environ.get("SERPER_API_KEY")
+    if key:
+        return key
+    key = _load_key_from_bashrc()
+    if key:
+        os.environ["SERPER_API_KEY"] = key
+    return key
+
+
+SERPER_API_KEY = _get_key()
 
 
 def search(query, gl="us", hl="en", num=10, fresh=None):
-    _require_key()
+    key = _get_key()
+    if not key:
+        sys.stderr.write(
+            "Error: SERPER_API_KEY is not set and could not be found in ~/.bashrc.\n"
+            "Add: export SERPER_API_KEY=\"<key>\"  to ~/.bashrc\n"
+        )
+        sys.exit(3)
     payload = {"q": query, "gl": gl, "hl": hl, "num": num}
     if fresh:
         payload["tbs"] = f"qdr:{fresh[0]}"  # d/w/m/y
@@ -44,7 +72,7 @@ def search(query, gl="us", hl="en", num=10, fresh=None):
         ENDPOINT,
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "X-API-KEY": SERPER_API_KEY,
+            "X-API-KEY": key,
             "Content-Type": "application/json",
         },
         method="POST",

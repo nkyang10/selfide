@@ -5,7 +5,12 @@ Linux binary instead of relying on prebuilt releases.
 **Status:** 🟢 MODIFIED + SELF-BUILT + SERVING — **FE-001** cookie-auth login, **FE-002** project
 selector fix, **FE-003** foreground re-sync, **FE-004** folder explorer on mobile, **FE-006** session-list
 last-prompt subtitle, **FE-007** home Sessions-tab row → mobile-first multi-line card.
-**Deployed** s028: 0.0.0-dev-202609130745 (pid 1086348) — **FE-011 slim live-reply fix**: the new
+**Deployed** s029: 0.0.0-mark-dev-202609140012 (pid 1557456) — **FE-013 picker rebuilt onto Zag.js
+TreeView**: the buggy `@pierre/trees` web-component browse tree is replaced by a Solid-native
+**Zag TreeView** (`@zag-js/solid`+`@zag-js/tree-view` 1.43.3, new `directory-tree-zag.tsx`, DEC-028).
+Keeps the **path text-input** + autocomplete and the domain-layer **mid-level folder reveal**
+(`C:\infrasys\java\jre\` → selects the middle `java` folder). Removed `@pierre/trees` + its test.
+Previous: s028 (0.0.0-dev-202609130745) — **FE-011 slim live-reply fix**: the new
 `<title> (N)` session now **registers client-side** (passes `location:{directory}` on create +
 `serverSync().session.remember` + child store insert, mirroring the normal new-session `seed`) so the
 seeded summary and fresh messages get a **live** assistant reply instead of only after a reload.
