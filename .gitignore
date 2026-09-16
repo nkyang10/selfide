@@ -28,3 +28,6 @@ coverage/
 
 # Logs that are not session/command records
 *.log
+
+# Fork runtime (pidfile, logs)
+50-projects/p003-opencode-fork/testing/

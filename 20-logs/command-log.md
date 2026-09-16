@@ -495,3 +495,20 @@
 | 2026-09-16 09:27 | s043 | commit | git commit "docs: s034-s043 wrap-up — ..." (ide repo, main) | 0 | b1e4252 (14 files, +873/-6) |
 | 2026-09-16 09:27 | s043 | push | git -c credential.helper=store push origin main | 0 | https://github.com/nkyang10/selfide.git 01a30ca..b1e4252 |
 | 2026-09-16 09:27 | s043 | push | git -c credential.helper=store push gitea main | 1 | http://192.168.1.162:3300 unreachable creds (stored cred only covers github.com) — need user auth to push gitea mirror |
+| 2026-09-16 19:54 | s044 | edit | add --detach re-exec entry + reorder cd before BIN_REL glob to deploy-web-4447.sh | 0 | detach via setsid nohup bash $SELF > testing/deploy-$PORT.log; survives invoker death |
+| 2026-09-16 19:55 | s044 | verify | bash -n scripts/deploy-web-4447.sh; grep cd/ROOT/SELF/DEPLOY_LOG | 0 | syntax OK; ROOT abs cd at line 12; SELF readlink -f; DEPLOY_LOG used only in --detach |
+| 2026-09-16 20:05 | s044 | deploy | bash scripts/deploy-web-4447.sh --detach (from ide workspace; fork root) | ? | backgrounded -> testing/deploy-4447.log |
+| 2026-09-16 20:05 | s044 | deploy | bash scripts/deploy-web-4447.sh --detach | 0 | detached, rebuilt (184MB arm64 bin), restarted => PID 3373444 on :4447, pidfile written, /login 200 |
+| 2026-09-16 20:20 | s044 | verify | curl /api/health + /global/health (auth cookie) | 0 | api/health now {"healthy":true,"version":"0.0.0-mark-dev-202609161151"}; global/health same |
+| 2026-09-16 20:24 | s044 | edit | protocol health.ts + server handler health.ts add version to /api/health | 0 | HealthHandler returns {healthy:true, version:InstallationVersion} |
+| 2026-09-16 20:26 | s044 | edit | new component server-update-refresh.tsx + mount in layout-new.tsx | 0 | watches global.servers.health.version change -> persistent toast + Refresh action (location.reload) |
+| 2026-09-16 20:28 | s044 | i18n | insert toast.serverUpdate.{title,description,refresh} into all 62 locale files (python script) | 0 | zh/zht translated, others en; {{version}} placeholder preserved |
+| 2026-09-16 20:32 | s044 | test | bun test src/i18n/parity.test.ts | 0 | 5 pass 0 fail |
+| 2026-09-16 20:33 | s044 | typecheck | cd packages/app; bun run typecheck; cd packages; bun run --filter @opencode-ai/server typecheck | 0 | both clean |
+| 2026-09-16 20:34 | s044 | lint | bunx oxlint packages/app/src/components/server-update-refresh.tsx packages/app/src/pages/layout-new.tsx packages/protocol/src/groups/health.ts packages/server/src/handlers/health.ts | 0 | 0 errors, 1 pre-existing warning (layout-new version accessor) |
+| 2026-09-16 20:35 | s044 | deploy | bash scripts/deploy-web-4447.sh --detach | 0 | rebuilt 0.0.0-mark-dev-202609161241; new PID 3379087 on :4447; pidfile written |
+| 2026-09-16 20:37 | s044 | verify | strings "$BIN" | grep -c toast.serverUpdate; curl /api/health | 0 | bundle contains 67 serverUpdate keys; api/health {"healthy":true,"version":"0.0.0-mark-dev-202609161241"} |
+| 2026-09-16 21:00 | s044 | debug | DEV badge click dead in prod build | - | root cause: layout-new passed debugTools only when import.meta.env.DEV; prod build -> undefined -> ChannelIndicator falls back to static div (titlebar.tsx:652) |
+| 2026-09-16 21:01 | s044 | edit | layout-new.tsx: pass debugTools unconditionally | 0 | DEV badge now renders clickable DropdownMenu (Home page/Refresh/Debug tools) |
+| 2026-09-16 21:02 | s044 | typecheck | cd packages/app; bun run typecheck | 0 | clean |
+| 2026-09-16 21:03 | s044 | deploy | bash scripts/deploy-web-4447.sh --detach | 0 | rebuilt 0.0.0-mark-dev-202609161421; PID 3434396 on :4447 |

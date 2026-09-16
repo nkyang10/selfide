@@ -5,7 +5,12 @@ Linux binary instead of relying on prebuilt releases.
 **Status:** 🟢 MODIFIED + SELF-BUILT + SERVING — **FE-001** cookie-auth login, **FE-002** project
 selector fix, **FE-003** foreground re-sync, **FE-004** folder explorer on mobile, **FE-006** session-list
 last-prompt subtitle, **FE-007** home Sessions-tab row → mobile-first multi-line card.
-**Deployed** s029: 0.0.0-mark-dev-202609140012 (pid 1557456) — **FE-013 picker rebuilt onto Zag.js
+**FE-014 deployed s044:** top-left **DEV** button → dropdown menu with
+**Home page** / **Refresh** / **Debug tools** (dropdown now renders in prod builds too, not just DEV).
+**FE-015 deployed s044:** server-update **Refresh toast** — `/api/health` returns `{healthy,version}`;
+on health-version change (new deploy) a persistent toast with a **Refresh** button is shown.
+**Deployed** s044: 0.0.0-mark-dev-202609161421 (pid 3434396) — FE-014/FE-015 (see above).
+Previous: s029 (0.0.0-mark-dev-202609140012, pid 1557456) — **FE-013 picker rebuilt onto Zag.js
 TreeView**: the buggy `@pierre/trees` web-component browse tree is replaced by a Solid-native
 **Zag TreeView** (`@zag-js/solid`+`@zag-js/tree-view` 1.43.3, new `directory-tree-zag.tsx`, DEC-028).
 Keeps the **path text-input** + autocomplete and the domain-layer **mid-level folder reveal**
@@ -237,6 +242,23 @@ ContextMenu) with the two items.
 **Verify:** `tsgo -b` clean; `tabs.test.ts` 12/12 green; full build
 `0.0.0-dev-202609130518`.
 **Notes:** `sessions/fe-012-draft-tab-context-menu.md` (FU-041 = on-device check)
+
+## FE-014 — DEV titlebar button → dropdown menu (DONE code, not yet deployed)
+
+**Problem:** the top-left **DEV** pill (blue bg, dev channel only) previously toggled debug tools on
+click with no discoverable path back to Home or a refresh action.
+
+**Fix (client-only, `packages/app`, `components/titlebar.tsx`):** `ChannelIndicator`'s DEV button is now a
+`DropdownMenu` trigger (`@opencode-ai/ui/dropdown-menu`, Kobalte) with three items:
+1. **Home page** — `navigate("/")` (home route).
+2. **Refresh** — `window.location.reload()`.
+3. **Debug tools** — preserves the previous `props.debugTools.toggle` behaviour.
+
+Existing menu styling/tokens reused via the shared `DropdownMenu` component; typecheck (`bunx turbo
+typecheck --filter=@opencode-ai/app`) clean.
+
+**Verify:** manual — click DEV in the titlebar, confirm the menu opens and each item behaves (Home
+navigates, Refresh reloads, Debug tools toggles).
 
 ## Vendored clone state
 
