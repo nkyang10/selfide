@@ -490,3 +490,8 @@
 | 2026-09-16 09:18 | s043 | deploy | OPENCODE_SERVER_PASSWORD=hahahaha OPENCODE_CHANNEL=mark-dev ./scripts/run-web.sh 4447 | 0 | new PID 3285617 :4447 binding 0.0.0.0; FE-001 login active |
 | 2026-09-16 09:19 | s043 | verify | curl / + /api/session + /project + asset on :4447 (cookie oc_creds) | 0 | served bundle index-DhYvOjPz.js (was CcDN76iX) = s043 build live; /api/session 200; /project 200; no-cookie 401; served bundle contains 8 x data.project (server-path refs) |
 | 2026-09-16 09:20 | s043 | docs | FU-053 closed (deployed, visual confirm pending); current-state.md updated | - | follow-up cycle complete |
+| 2026-09-16 09:25 | s043 | commit | git -C fork commit "fix(app): Home sessions + project list from server /project (no per-device localStorage)" | 0 | fork@dev 6f110b4 (4 files, +109/-50) |
+| 2026-09-16 09:26 | s043 | push | PATH+=~/.bun/bin git push origin dev (fork) | 0 | https://github.com/nkyang10/opencode.git e64131e..6f110b4 (pre-push typecheck 30/30, cached) |
+| 2026-09-16 09:27 | s043 | commit | git commit "docs: s034-s043 wrap-up — ..." (ide repo, main) | 0 | b1e4252 (14 files, +873/-6) |
+| 2026-09-16 09:27 | s043 | push | git -c credential.helper=store push origin main | 0 | https://github.com/nkyang10/selfide.git 01a30ca..b1e4252 |
+| 2026-09-16 09:27 | s043 | push | git -c credential.helper=store push gitea main | 1 | http://192.168.1.162:3300 unreachable creds (stored cred only covers github.com) — need user auth to push gitea mirror |
