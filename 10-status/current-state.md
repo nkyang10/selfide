@@ -3,6 +3,35 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
+- **Last updated:** 2026-09-16 (UTC) — **s046 USER-VERIFIED ✅: foreground choice dialog now works.** After the
+  s046 fix (`0.0.0-mark-dev-202609161521`, :4447), the user confirmed "it works now" — the decision dialog survives
+  background→foreground (FU-050 closed). Details:
+  `20-logs/sessions/2026-09-16_s046_foreground-question-wipe-fix.md`.
+
+- **Last updated:** 2026-09-16 (UTC) — **s046 FIXED + DEPLOYED: foreground choice dialog was being WIPED by
+  `syncQuestions`, not missing.** Phone log (s045 instrumentation) showed `dock:mounted` while backgrounded, then
+  on foreground `dir:syncQuestions protocol=v1 all=0` + `lyt:state questionStore=0` → dialog died. Root cause: the
+  v1 branch called `serverSDK.client.question.list()` **without directory scope** → server routed to its default
+  workspace (`testing/`) → empty list → `reconcile([])` deleted the SSE-populated store. Fix in
+  `context/directory-sync.ts:syncQuestions`: pass `{directory}` in v1 branch + only reconcile when the fetch actually
+  succeeded (`fetched` guard). Chat survived because v1 session.sync is directory-scoped; only the question path
+  wasn't. **Live as `0.0.0-mark-dev-202609161521` (:4447 PID 3468506, bundle `index-BPKpEQSx.js`)**. Next: FU-050
+  phone retest — lock >20 s while agent asks a question → foreground → dialog must stay visible; log should read
+  `dir:syncQuestions fetched=true … pending=1`. Details:
+  `20-logs/sessions/2026-09-16_s045_foreground-dialog-debug.md` + `2026-09-16_s046_foreground-question-wipe-fix.md`.
+
+- **Last updated:** 2026-09-16 (UTC) — **s045 DEPLOYED: always-on server-side debug logging for the foreground
+  choice-dialog gap (FU-050 retest instrumented).** User: "chat history syncs on foreground but the choice
+  dialog is not there." Root cause of invisibility: the `/__debug` server sink existed but `debugLog` was gated
+  behind `localStorage["foreground-debug"] === "1"` (never set), so sync errors were swallowed. Fix: gate removed
+  (always posts to `/__debug`); added granular logs in `syncQuestions` (protocol/all/pending/firstOwn/otherSessions),
+  foreground (`lyt:state` = store length+first id after each sync), `questionRequest` memo (`composer:questionRequest
+  shown/hidden`), `SessionQuestionDock` mount (`dock:mounted`). **Build `0.0.0-mark-dev-202609161501` live on :4447**
+  (PID 3466112, bundle `index-BL0wOlIl.js`), sink verified end-to-end (probe logged to `testing/web-4447.log`).
+  **Next: user reproduces on phone (background >20s while agent asks a question → foreground), then we read
+  `testing/web-4447.log`** for the lyt→syncQuestions→questionRequest→dock sequence. Details:
+  `20-logs/sessions/2026-09-16_s045_foreground-dialog-debug.md`.
+
 - **Last updated:** 2026-09-16 (UTC) — **s043 BUILT + DEPLOYED: Home project/session list is SERVER-SIDE
   (fix live on :4447).** Fresh-device bug fix (Home session list empty despite `/api/session` returning
   all sessions) shipped as `0.0.0-mark-dev-202609160919` (bun 1.3.14); old PID 3251919 killed, `run-web.sh

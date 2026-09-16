@@ -1,269 +1,10 @@
 # Command Log (append-only)
 
 > Format defined in `20-logs/POLICY.md`. Append new rows at the bottom. Never rewrite history.
+> Older half rotated to `90-archive/command-log-2026-09.md` (s045, 2026-09-16).
 
 | UTC time | Session | Target | Command | Exit | Result / note |
 |---|---|---|---|---|---|
-| 2026-09-07 (session start) | s001 | folder | *(see session record s001 for full list)* | 0 | Control-center structure created: README.md, AGENTS.md, .gitignore, 00-env/, 10-status/, 20-logs/, 30-runbooks/, 40-knowledge/, 50-projects/, 90-archive/, scripts/, .opencode/skills/ |
-| 2026-09-07 (cont.) | s001 | folder | write README.md, AGENTS.md, .gitignore | 0 | Operating model, agent protocol, secrets-ignore added per gdx-style |
-| 2026-09-07 (cont.) | s001 | folder | write `00-env/*`, `10-status/*`, `20-logs/*`, `30-runbooks/*`, `40-knowledge/*`, `50-projects/*` | 0 | Full scaffold + research persisted (see session record) |
-| 2026-09-07 (cont.) | s001 | folder | write `40-knowledge/opencode-webui-landscape.md`, `40-knowledge/mobile-multitasking-acp.md` | 0 | Remaining Level-4/5 research persisted (no knowledge left only in chat); links added in agentic-web-ui-research.md |
-| 2026-09-07 | s002 | research | serper.py x6 queries (MetaGPT/SDLC roles/self-improving/GitHub-agent/Agentic Verifier/Copilot cloud agent) | 0 | Multi-agent SDLC landscape gathered |
-| 2026-09-07 | s002 | research | webfetch arxiv 2308.00352, 2504.15228 (SICA), live-swe-agent repo, MetaGPT+OpenHands raw READMEs, systemsdigest 7-tools | 0 | Core primary sources captured (2 fetches timed out, re-run via raw README) |
-| 2026-09-07 | s002 | knowledge | write `40-knowledge/multi-agent-sdlc-engine-research.md` | 0 | Research persisted (session s002) |
-| 2026-09-07 | s002 | p002 | write README.md (design), features/FE-001-core-pipeline/{spec,status}.md, config/engine.yaml.example, prompts/*.md placeholders | 0 | p002 scaffolded per user choice (design-doc-first) |
-| 2026-09-07 | s002 | folder | git mv-less rename: `50-projects/p002-TEMPLATE` → `p000-TEMPLATE` + sed references in README.md, current-state.md, s001 session | 0 | freed p002 number; collision resolved |
-| 2026-09-07 | s002 | knowledge | append DEC-005 to `40-knowledge/decisions-log.md` | 0 | recorded design-first + scratch-repo decision |
-| 2026-09-07 | s002 | followups | append FU-009 (scratch repo details), FU-010 (model choice) to open-followups.md | 0 | recorded |
-| 2026-09-07 | s002 | p002 | edit README.md: add Operating-model (overnight cycle) section + researcher role + MVP as night-cycles | 0 | FE-002 spec+status written; engine.yaml.example extended (night_cycle, require_mgmt, researcher) |
-| 2026-09-07 | s002 | p002 | write features/FE-002-operating-cycle/spec.md + status.md; prompts/researcher.md | 0 | operating cycle designed verbatim to user usage |
-| 2026-09-07 | s002 | knowledge | append DEC-006 to decisions-log.md (and fix DEC-005 header placement) | 0 | overnight-cycle decision recorded |
-| 2026-09-07 | s002 | ide | git add/commit/push ide control center -> nkyang10/selfide (main) | 0 | mirror live; remote URL cleaned of token after push |
-| 2026-09-07 | s002 | p002 | write scripts/github_api.py, scripts/driver.py, prompts/{assembler,engineer,qa,reviewer,researcher,retro}.md, config/engine.json.example, rm templates, add .opencode/agent/README | 0 | engine MVP implemented |
-| 2026-09-07 | s002 | p002 | `python3 -m py_compile driver.py github_api.py`; `driver --help`; `driver cycle --work ... --dry-run` | 0 | dry-run end-to-end OK; fixed --dry-run arg placement + dry interview file bug |
-| 2026-09-07 | s002 | docs | write 30-runbooks/rb-002-night-cycle.md + index; update FE-001/002 status.md; DEC-007; README status | 0 | ops docs recorded |
-| 2026-09-07 | s002 | folder | git push selfide with engine (second push) | 0 | selfide updated (after final tidy, verify) |
-| 2026-09-07 | s002 | p002 | verify selfide remote tree (16 engine blobs), clean working tree; record DEC-008 (engine ships in selfide subfolder per user); reorg open-followups (FU-005/009/014 resolved) | 0 | docs updated; no code change |
-| 2026-09-07 | s002 | p002 | driver.py: parallel engineers (per-task git worktrees, batched max_parallel) + background researcher during complete phase; config keys engineer.max_parallel/researcher.on | 0 | parallel multi-role cycle implemented |
-| 2026-09-07 | s002 | p002 | live smoke: `opencode run --agent assembler --auto` on a materialized agent | 0 | first inline permission {} rejected; block-YAML permission works; agent exec verified (wrote PONG.txt) |
-| 2026-09-07 | s002 | p002 | AGENT_FRONTMATTER → block-style YAML; py_compile + full dry-run pass | 0 | schema fix validated (see DEC-007 revisit) |
-| 2026-09-07 | s002 | p002 | `driver.py probe --repo nkyang10/cloud-pos-system` (live) | 0 | PASS: default_branch, create_issue, git push. FAIL 403: issue comments, issue PATCH, create_pr. Provisioned fine-grained PAT is missing Issues + Pull-requests (read&write) perms |
-| 2026-09-07 | s002 | p002 | fix git() credential helper (GIT_CONFIG_COUNT/KEY/VALUE env) | 0 | push actually works with Contents write; helper bug fixed (probe caught it) |
-| 2026-09-07 | s002 | p002 | cleanup probe artifacts | 0 | probe-base branch is the tmp default head on empty playground (not deletable w/o updating default); issues #1+#2 open; cleanup queued with token upgrade |
-| 2026-09-07 | s002 | p002 | `driver.py probe` on cloud-pos-system (perm re-check after user added Issues+PRs R&W) | 0 | ALL PASS: default/issue/comment/push/PR/close/delete. Repo repaired: default=main, probe branches deleted, old issues closed. Probe redesigned: branches off base, unique per-run branch, auto-cleanup |
-| 2026-09-07 | s002 | p002 | driver.py: git() retries (network flakiness to github.com:443 seen ~135s connect drops) | 0 | robustness added for night runs |
-| 2026-09-07 | s002 | p002 | write USER-GUIDE.md (user manual) + READINESS-REVIEW.md (step-by-step readiness) | 0 | documented usage + honest readiness verdict |
-| 2026-09-07 | s002 | p002 | fix: reviewer verdict now gates merge; agent stdout→run logs (deadlock fix); cycle2 re-push FF fix (delete stale branch); task-branch cleanup; log routing for all phases | 0 | readiness raised (was: decorative review, PIPE deadlock risk, cycle2 push break) |
-| 2026-09-07 | s002 | p002 | audit: agent exit codes now checked + retried once; phase artifacts verified (plan tasks, per-task commits, QA gate, APPROVE verdict); QA tests/verdict committed into PR; REST urlopen timeout=45s; run_agent/spawn_agent refactor | 0 | no more silent lost triggers / no idle-forever (per user question) |
-| 2026-09-07 | s002 | p002 | LIVE first cycle `driver run --run 20260907-1207 --cycle 1` on cloud-pos-system | 0 | end-to-end product: assembler plan → 4 parallel engineers → QA 15 tests → reviewer approve → PR #13 merged into main (+1138/-1). Researcher + morning report posted on epic #12 |
-| 2026-09-07 | s002 | p002 | diagnose+fix during live run: (1) opencode agent load fails with RELATIVE --dir when exec'd (use absolute --dir); (2) task branch engine/<rid>/tN clashed with engine/<rid> ref namespace → flat engine/<rid>-tN; (3) GitHub REST 500 on create_pr = transient outage → retries on 5xx added | 0 | engine hardened in the field |
-| 2026-09-07 | s002 | p002 | ship step of cycle1 completed manually (retitle+merge PR #13) after transient 500 crashed the driver | 0 | ship-path 5xx-retry validated in code, pending re-run to confirm self-landing |
-| 2026-09-07 | s002 | p002 | cycle 2 live (run 20260907-1207): 5 engineers, QA green, reviewer approve, DESIGNER emitted NEXT-CYCLE.md (new role live) | 0 | PR #14 merged (+/-). Ship completed manually again (client create_pr 500 bug) |
-| 2026-09-07 | s002 | p002 | ENHANCE: (1) per-worker+per-phase logging -> runs/<rid>/workers-<cycle>.jsonl + phases-<cycle>.jsonl, surfaced in morning report; (2) engineers now run on a ThreadPoolExecutor (pipelined, max_parallel concurrent — no more batch stalls); (3) github_api curl-fallback on 5xx for POST/PATCH/PUT; (4) fix per_page=30 comment-list bug in client | 0 | worker pipeline + logging + trigger-loss hardening (user request) |
-| 2026-09-07 | s002 | p002 | Research: durable/overnight agent workflows (Temporal, Dapr, LangGraph checkpointer, OpenHands pause/resume, GitHub Actions durable runner, Copilot cloud agent) | 0 | 40-knowledge/durable-agent-orchestration-research.md |
-| 2026-09-07 | s002 | p002 | ENHANCE (do-as-u-think): event-sourced resume — per-cycle state-<n>.json tracks every phase (assembler/engineers/qa/reviewer/designer/ship); `run` resumes from the first incomplete phase, skips completed ones, keeps worktree/branches (no reset); LIVE-validated: seeded all-done state → all 6 phases skipped with rc=0, no agents/new PRs | 0 | the lost-time fix (no more full redo after a kill) |
-| 2026-09-07 | s002 | p002 | KICKOFF marathon: `marathon --run 20260907-1646 --max 30 --min-gap 45` (detached, pid 1171474) on cloud-pos-system — 12 TARGETS (full cloud POS), epic #15, auto gates | 0 | long autonomous run started (cycles until all targets [x] or 30) |
-| 2026-09-07 | s002 | p002 | Feature proposals move to GitHub Issues: designer NEXT-CYCLE bullets mirrored as `[proposal]` issues (label engine/proposal, linked from PR body); `.github/ISSUE_TEMPLATE/feature_request.yml` seeded into the target repo; self-describing titles | 0 | applied live (label smoke-tested via #16); marathon cycles 2+ will use it |
-| 2026-09-07 | s002 | p002 | Root cause found: original marathon stalled because parallel engineers edit overlapping files -> merge conflict -> crash + wedged index blocked re-runs. Fixed: git reset --hard before checkout, conflict-tolerant merge (-X theirs, else skip task), assembler/engineer prompts require file-disjoint tasks | 0 | chained flow now safe under parallelism |
-| 2026-09-07 | s002 | p002 | Relaunched marathon pid 1179353: `marathon --run 20260907-1646 --max 30 --min-gap 0` (cycles trigger each other, no wait) | 0 | cycle 1 rebuilding with fixes |
-| 2026-09-07 | s002 | p002 | DIAGNOSED marathon stall: GitHub /pulls returns intermittent 500s (flap) — client used with proper auth still 500 within flap windows; raw curl 201 when GitHub healthy; _curl_retry alone 201 | 0 | cause = GitHub-side /pulls flapping, not engine/auth |
-| 2026-09-07 | s002 | p002 | Hardened: exponential 5xx retries (~2min), curl fallback, ship-steps now retried up to 6x with 90s cooldown via cheap phase-resume; cleaned 35+ probe/engine leftovers | 0 | relaunched marathon pid 1404587 (start 1, min-gap 0) |
-| 2026-09-08 | s003 | p003 | scaffold p003-opencode-fork (README/config/notes/scripts/sessions) + .gitignore entry for vendored clone | 0 | project for modifying opencode created |
-| 2026-09-08 | s003 | p003 | git clone --depth 1 https://github.com/anomalyco/opencode.git opencode | 0 | branch `dev`, HEAD ecbc6ccac85; MIT; monorepo (bun) |
-| 2026-09-08 | s003 | dev-station | curl -fsSL https://bun.sh/install \| bash (confirmed with user) | 0 | bun 1.4.2 → ~/.bun/bin, PATH added in ~/.bashrc |
-| 2026-09-08 | s003 | p003 | bun install (cwd opencode) | 0 | 2346 packages, ~24s |
-| 2026-09-08 | s003 | p003 | bun ./packages/opencode/script/build.ts --single | 0 | opencode-linux-arm64 built; smoke test `0.0.0-dev-202609072334` |
-| 2026-09-08 | s003 | p003 | opencode serve --port 4447 (testing/) | 0 | started but http Basic-auth 401 — shell env leaks OPENCODE_SERVER_PASSWORD; killed |
-| 2026-09-08 | s003 | p003 | env -u OPENCODE_SERVER_PASSWORD …/opencode web --port 4447 (testing/, setsid+nohup) | 0 | RUNNING pid 1442925 → http://127.0.0.1:4447/ GET / = 200 |
-| 2026-09-08 | s003 | p003 | write scripts/build-linux.sh + run-web.sh, notes/build-runtime.md | 0 | repeatable build+run; gotchas recorded (env leak, leftover :4445 instance) |
-| 2026-09-08 | s003 | p003 | restart opencode web with `--hostname 0.0.0.0` (port 4447, testing/) | 0 | LAN-reachable: http://192.168.1.249:4447/ = 200; pid 1445769; run-web.sh updated |
-| 2026-09-08 | s003 | github | fork anomalyco/opencode → nkyang10/opencode (via app, token API lacked perms; token in /tmp/opencode/gh_token, deleted after) | 0 | fork public, fork=true; PAT needs rotation (FU-019) |
-| 2026-09-08 | s003 | p003 | git remote rename origin upstream; git remote add origin https://github.com/nkyang10/opencode.git; git fetch origin | 0 | vendored clone now tracks our fork (origin) + upstream original; still shallow @ecbc6cc |
-| 2026-09-08 | s004 | p003 | FE-001 impl: login.ts (new) + auth middleware + server.ts routes + shared cookie helpers | 0 | login page serves; cookie → Basic bridging on web+API gates |
-| 2026-09-08 | s004 | p003 | bun run --cwd packages/server typecheck; --cwd opencode typecheck | 0 | clean |
-| 2026-09-08 | s004 | p003 | bun ./packages/opencode/script/build.ts --single --skip-install (x3) | 0 | armed: 0.0.0-dev-202609080057; smoke test passed |
-| 2026-09-08 | s004 | p003 | restart: OPENCODE_SERVER_PASSWORD=hahahaha …/opencode web --port 4447 --hostname 0.0.0.0 | 0 | login active; pid 1490948 |
-| 2026-09-08 | s004 | p003 | curl verification suite (7 auth scenarios + no-password regression on :4448) | 0 | all pass — see session s004 table |
-| 2026-09-08 | s004 | p003 | restyle login page to @opencode-ai/ui v2 tokens (light: #fafafa bg, blue #3b5cf6 accent, Inter/JetBrainsMono) + rebuild | 0 | now matches app design system; re-run curl group passes (401 page, 200 w/ cookie) |
-| 2026-09-08 | s004 | p003 | DIAGNOSED "project selector does nothing": console showed /find/file + /file 500; compared stock :4445 (works) vs fork (500) — dev-branch layer-compile defect `a.name` in FileHttpApi.list/findFile | 0 | pre-existing dev-branch bug, NOT the login change |
-| 2026-09-08 | s004 | p003 | FE-002 patch in handlers/file.ts: catchCause guard on list+findFile; list falls back to plain FSUtil listing; typecheck+rebuild | 0 | /file + /find/file return 200 with real entries; selector usable again |
-| 2026-09-07 | s002 | p002 | Autopsy of marathon ship failures (user: search errors + add logs): added verbose ghapi logging (every attempt, body snippet, curl rc/stderr) | 0 | pinned: POST /pulls -> 500 empty body on BOTH repos, BOTH clients, fresh limits — account-level GitHub issue |
-| 2026-09-07 | s002 | p002 | Implement `gates.ship: direct_push` (git push branch->main, keeps branch for later PR) as workaround; incident inc-001 | 0 | product accumulation guaranteed independent of /pulls |
-| 2026-09-08 | s002 | gitea | Migrated cloud-pos-system + selfide to local Gitea (http://192.168.1.162:3300) via /repos/migrate (history+tree; issues not imported); repos renamed to mark/cloud-pos-system, mark/selfide; engine token created (chmod600 ~/.gitea-engine-token) | 0 | local Gitea authoritative for p002 |
-| 2026-09-08 | s002 | gitea | engine adapter: Gitea base+token auth, label name→id, PR head without owner, POST merge Do:"merge", branch delete; config target mark/cloud-pos-system; engine-env-gitea.sh | 0 | client verified E2E on Gitea (issue→PR→merge→delete) |
-| 2026-09-08 | s002 | gitea | Relaunch 30-cycle marathon on GITEA: `marathon --run 20260908-0233 --max 30 --min-gap 0` (detached pid 1535857), epic #3 mark/cloud-pos-system; pinned checkout remote to Gitea (fixes stale GitHub origin) | 0 | full POS builds accumulate on local Gitea independent of GitHub |
-| 2026-09-08 | gitea | Agent-workspace discuss -> agreed mono repo + Gitea-native feature board + pinned status. Set up: labels (epic/proposal/enhancement/idea/followup/do-today) both repos; Milestone "Cloud POS — 12 targets"; pinned STATUS issue #1 (mark/selfide); docs/agent-workspace.md | 0 | Projects feature needs server app.ini enable (documented); labels+milestone board already live |
-| 2026-09-08 | gitea | Per official docs (docs.gitea.com/api/.../issue-create-issue): create-issue `labels` = array of integer LABEL IDs; our engine client already translates names->ids (verified live); replace-labels accepts names or ids | 0 | status issue #1 created with epic label id 7 and pinned (204) |
-| 2026-09-08 | s005 | p002 | status query: cloud-pos test run — ps + Gitea/GitHub API + run dir 20260908-0233 inspection | 0 | read-only status; no mutation |
-| 2026-09-08 | s005 | p002 | diagnose cycle-2 eng fails: workers-2.jsonl rc=-1 at 3600s; gateway jsonl dur analysis + ssh DGX (vllm_node/gateway 8102) | 0 | root cause: LLM gateway 3-15min/completion 02:45-03:56Z inside 3600s watchdog ⇒ 4x engineers killed; t5 fine now (fast 30-49k-tok completions); also driver kill()→no wait = zombie leak; SIGKILL drops buffered run logs |
-| 2026-09-08 | s005 | p002 | diagnose cycle-2 eng fails: workers rc=-1@3600s; DGX gateway jsonl (3-15min/completion 02:45-03:56Z); ssh DGX vllm_node/gateway 8102 | 0 | root cause: degraded LLM gateway inside 1h watchdog; also kill()->no wait = zombies; SIGKILL drops buffered run logs |
-| 2026-09-08 | s005 | p002 | fix driver.py: _terminate (SIGTERM->SIGKILL->wait) in all timeout paths; timeout_secs 7200; run_agent single attempt; researcher+engineers sequential (1 role); per-task merge+push; _park_cycle (waiting-product); marathon no-retry stop | 0 | engine rules: 1 role / no retry / timeout->report+park. py_compile OK |
-| 2026-09-08 | s005 | p002 | kill old marathon+drivers (1535857/1570581/1572483/1647817/1692502); restart: marathon --run 20260908-0233 --start 2 --max 30 --min-gap 0 --repo mark/cloud-pos-system (pid 1722974) | 0 | stateful resume verified: assembler skipped, cycle 2 continuing under new rules |
-| 2026-09-08 | s005 | p002 | 3-cycle smoke test: kill 1722974-tree; relaunch setsid marathon --run 20260908-0233 --start 2 --max 4 --min-gap 0 --repo mark/cloud-pos-system (pid 1753090) | 0 | cycles 2-4 then stop; detached via setsid (tool kill-timeout had reaped the first relaunch) |
-| 2026-09-08 | s005 | p002 | worker-activity tracing: gateway jsonl keys (model/general→DeepSeek-V4-Flash-0731), /v1/models, /proc io, pty probes | 0 | CONFIRMED: engine agents DO hit DGX gateway; earlier "no big pt today" was my parse bug (usage is top-level, not under "usage") |
-| 2026-09-08 | s005 | p002 | visibility fix: stdbuf+script -qefc pty wrapper in _agent_cmd/spawn_agent (streams opencode JSONL live); python-pty reader had 64KB/1s drain bug + --agent+pty no-output; removed; _terminate now killpg (start_new_session); config engine.json model="" → "dgx/general" | 0 | 179KB/90s live growth, 34 events; DeepSeek gateway serving researcher ses_f7fd59943f |
-| 2026-09-08 | s005 | p002 | restart marathon (3rd, final): --start 2 --max 4 (pid 1758047) — streaming + pinned model live | 0 | user can now watch agent-engineer/research logs grow in real time |
-| 2026-09-08 | s005 | p002 | findings = res-only gap: ENGINE_RESEARCH.md was never committed to repo (only temp res_dir + 2k-truncated board comment); backfilled ENGINE_STATE/RESEARCH/20260908-0233.md on engine branch (9bb0e50) + driver now auto-persists research each cycle | 0 | in Gitea engine/20260908-0233; verified via ls-tree |
-| 2026-09-08 | s005 | p002 | Gitea wiki knowledge accumulation: has_wiki=True; .wiki.git 500 until initialized; created findings page via POST /wiki/new (201); verified git clone/push (577bc89); added gh.add_wiki_page() + driver auto-publishes research to wiki per cycle (non-fatal) | 0 | wiki live: 20260908-0233-researcher + _Sidebar; probe page removed |
-| 2026-09-08 | s006 | p003/app | read-only code audit: server-sdk.tsx (stream lifecycle + pageshow), server-sync.tsx (connected-time refresh), server-session.ts (sync/fresh), timeline/model.ts (stale force-sync on remount), directory-layout.tsx (open-session owner), event.ts+global.ts (10 s server.heartbeat), build.ts (app embedded in binary) | 0 | root cause mapped; no mutation |
-| 2026-09-08 | s006 | folder | write 20-logs/sessions/2026-09-08_s006_fe003-foreground-resync-plan.md (findings + FE-003 plan) | 0 | plan pending user GO |
-| 2026-09-08 | s006 | p003/app | FE-003 impl: server-sdk.tsx (STREAM_STALE_MS/shouldRestartStream + lastEventAt + resume() + visibilitychange/pageshow wiring), directory-layout.tsx (foreground force-sync of open session), server-sdk.test.ts (replace resumeStreamAfterPageShow test) | 0 | code changed |
-| 2026-09-08 | s006 | p003/app | bun run typecheck (packages/app) | 0 | clean |
-| 2026-09-08 | s006 | p003/app | bun test server-sdk.test.ts (12 pass); server-session.test.ts (74 pass); full ./src unit (726 pass/103 files); ./test-browser (41 pass/14 files) | 0 | all green |
-| 2026-09-08 | s006 | p003 | bun ./packages/opencode/script/build.ts --single --skip-install | 0 | armed 0.0.0-dev-202609081414; smoke OK |
-| 2026-09-08 | s006 | :4447 | kill old pid 1858134; start new binary (cwd p003-opencode-fork, password preserved, 0.0.0.0:4447) → pid 1949123; GET / 200 (bundle index-DRf549dE.js); /login 200; POST /logout 200; SSE /event → server.connected + server.heartbeat | 0 | live swap verified; auth username=opencode (default) |
-| 2026-09-08 | s006 | p003 | git add (3 FE-003 files) + git commit "feat(app): resume event stream and re-fetch open session on foreground" → a4d5d6f on dev (now 2 commits ahead of upstream/dev; not pushed) | 0 | working tree clean |
-| 2026-09-08 | s007 | research | serper x2 (@pierre/trees npm/file-tree; SolidJS file tree explorer components) + npm registry check of @pierre/trees | 0 | @pierre/trees confirmed (pierrecomputer/pierre, Apache-2.0, trees.software); generic SolidJS trees lack file-explorer behavior |
-| 2026-09-08 | s007 | p003/app | FE-004 impl: directory-picker.tsx (v2 dialog on all platforms), dialog-select-directory-v2.tsx (last-opened-project start + capture-click tap-to-deselect via item.deselect), dialog-select-directory-v2.css (≤680px full-viewport :has) | 0 | code changed |
-| 2026-09-08 | s007 | p003/app | bun run typecheck (packages/app) | 0 | clean |
-| 2026-09-08 | s007 | p003/app | bun test picker tests (24 pass); full ./src unit (726 pass/103 files); ./test-browser (41 pass/14 files) | 0 | all green |
-| 2026-09-08 | s007 | p003 | bun ./packages/opencode/script/build.ts --single --skip-install | 0 | armed 0.0.0-dev-202609081709; smoke OK (bundle index-CYFDBbly.js) |
-| 2026-09-08 | s007 | :4447 | kill old pid 1949123; start new FE-004 binary (pid 2229139); GET / 200 + new bundle; login/logout 200; SSE connected+heartbeat | 0 | live swap verified |
-| 2026-09-08 | s007 | p003 | git add (3 FE-004 files) + git commit "feat(app): use pierre file-tree folder explorer for open-project on all platforms" → 92e2c57 on dev (3 commits ahead of upstream/dev; not pushed). Unrelated pre-existing bun.lock + packages/opencode/package.json (web-push dep) left unstaged | 0 | committed; tree clean except unrelated files |
-| 2026-09-08 | s006 | p002 | fix cmd_report NoneType (start/end None guard); assembler timeout 1500→3000s configurable (assembler.timeout_secs) + time-efficient prompt hint; discarded stale cycle-3 PRD.md | 0 | compile OK |
-| 2026-09-08 | s006 | p002 | relaunch marathon --start 3 --max 4 (pid 1948563); cycle-3 assembler re-running (fresh, larger watchdog) | 0 | cycle 3 re-attempt |
-| 2026-09-08 | s006 | p002 | knowledge bridge implemented: (1) agent_cmd/_agent_cmd/spawn_agent session param --session (opencode resume); _last_session_id() tails run log; engineer loop resumes interrupted task's own session; (2) engineer prompt points at RESEARCH + TASK-NOTES, seeds ENGINE_STATE/TASK-NOTES/t<N>.md stub committed with task | 0 | applies from next cycle spawn (cycle 3 already loaded old code); helper utested |
-| 2026-09-08 | s007 | p002 | refined cycle model (user spec): no-park; half-done engineer work finished by SMALL CYCLES N.1,N.2...; unstarted roll to next main cycle; per-engineer work per cycle = "as much as it can". Implemented: --cycle accepts "3.1"; workers-{base_cycle}.jsonl statuses done/half shared accross sub-cycles; engineer timeout -> half (keep worktree+branch+session, continue); sub-cycle processes ONLY half (session resume via knowledge bridge); assembler/researcher skipped in sub-cycles; engineer.cycle_time_secs budget (default 12h); marathon --max-sub, flushes half tasks per cycle then continues; _park_cycle removed | 0 | compiles; applies from next marathon spawn (cycle 3 on old binary) |
-| 2026-09-09 03:10 | s009 | p003/opencode | bun run typecheck (packages/opencode) — verify s008 uncommitted push server work | 0 | clean (push.ts + route.ts + wiring typecheck) |
-| 2026-09-09 03:35 | s009 | p003/app | impl client web push: public/sw.js (push→showNotification, notificationclick→focus/open session url), src/utils/web-push.ts (enable/disable/sub, secure-context guard), entry.tsx SW register | 0 | code changed |
-| 2026-09-09 03:52 | s009 | p003/app | settings toggle: NotificationSettings.webPush + accessors, NotificationsSection SettingsRow (data-action=settings-notifications-webpush), i18n en/zh + 60 locales (English-fallback keys), web-push.test.ts | 0 | code changed; i18n parity now green |
-| 2026-09-09 03:58 | s009 | p003/app | bun run typecheck (packages/app) | 0 | clean (tsgo -b) |
-| 2026-09-09 03:59 | s009 | p003/app | bun test --conditions=solid ./src | 0 | 729 pass / 104 files / 0 fail |
-| 2026-09-09 04:00 | s009 | p003/app | bun test --conditions=browser ./test-browser | 0 | 41 pass / 14 files / 0 fail |
-| 2026-09-09 04:00 | s009 | p003/app | rm -rf dist && bunx vite build | 0 | dist has assets + public files incl sw.js, site.webmanifest; sw.js→application/javascript (mime-types lookup) at serve time |
-| 2026-09-09 04:02 | s009 | p003/app | git status/diff review | 0 | coherent: settings.tsx, entry.tsx, sw.js, web-push.ts(+test), settings-general.tsx, i18n 62 files |
-| 2026-09-09 04:10 | s009 | p003/opencode | review uncommitted FE-005 (bun.lock bun install prune; package.json web-push; push.ts/route.ts/server.ts; client sw.js/web-push.ts/settings/entry/i18n) | 0 | found: bun.lock has 37 dead-entry removals (unreferenced vitest-coverage + @standard-community) — safe to keep (catalog effect beta.83 unchanged, no coverage scripts); disableLogger flipped to false (s008 debug) |
-| 2026-09-09 04:11 | s009 | p003 | revert disableLogger true (restore original prod silent-logging) in httpapi/server.ts; remove dead useWebPushEnabled hook + unused createResource import (web-push.ts) | 0 | both fixes applied |
-| 2026-09-09 04:12 | s009 | p003/opencode | bun run typecheck (opencode pkg => clean); bun run typecheck (app => clean) | 0 | both clean |
-| 2026-09-09 04:12 | s009 | p003/app | bun test --conditions=solid ./src | 0 | 729 pass / 104 files / 0 fail |
-| 2026-09-09 04:15 | s009 | p003 | git add -A + git commit "feat(app,core): send web push notifications when a session finishes (FE-005)" -> b922fe4 (73 files, +617/-37) | 0 | committed; working tree clean |
-| 2026-09-09 04:17 | s009 | p003 | git push origin dev (shallow base ecbc6cc; HTTPS, no cred helper) | 1 | failed: no Username (no creds); ssh -T git@github.com denied |
-| 2026-09-09 04:18 | s009 | p003 | git push origin dev via user PAT (GIT_ASKPASS tmp script, token in env only, not persisted); PATH+=~/.bun/bin for husky pre-push | 0 | ecbc6cc..b922fe4 dev -> dev; pre-push typecheck 30/30; tmp askpass removed |
-| 2026-09-09 04:20 | s009 | p003 | optional: git config credential.helper store + git credential approve x-access-token (user PAT) -> ~/.git-credentials (chmod 600, home dir, NOT project) | 0 | token stored for git push; verified ls-remote + push auto-auth |
-| 2026-09-09 04:25 | s009 | p003 | audit running instances: :4445 = ~/.opencode/bin/opencode (official 08-25, NO FE) ; :4447 gone; fork binary dist/opencode-linux-arm64 built 09:26 (pre-FE-005) | 0 | dev fork NOT deployed; old official running |
-| 2026-09-09 04:30 | s009 | p003 | ./scripts/build-linux.sh (HEAD b922fe4) | 0 | binary 0.0.0-dev-202609090450, smoke ok |
-| 2026-09-09 04:35 | s009 | :4447 | ./scripts/run-web.sh 4447 (pid 2414425→2415340) | 0 | login active (hahahaha); root 401, /login 200 |
-| 2026-09-09 04:40 | s009 | p003 | BUG found: GET /sw.js -> 401 (auth-gated via PUBLIC_UI_PATHS; sw.js missing) | 0 | service worker cannot register behind login -> push blocked |
-| 2026-09-09 04:42 | s009 | p003 | fix: add /sw.js to PUBLIC_UI_PATHS in server/shared/public-ui.ts | 0 | server typecheck clean |
-| 2026-09-09 04:50 | s009 | p003 | rebuild (0.0.0-dev-202609090452) + restart :4447 | 0 | /sw.js now 200 text/javascript, manifest 200, login 200, root 401, pubkey 401 |
-| 2026-09-09 04:52 | s009 | p003 | git commit "fix(server): serve /sw.js publicly..." -> e0511c4 | 0 | clean tree |
-| 2026-09-09 04:53 | s009 | p003 | git push origin dev (credential store) | 0 | b922fe4..e0511c4 dev->dev; pre-push typecheck 30/30 |
-| 2026-09-09 05:05 | s009 | :4447 | download cloudflared 2026.8.3 -> ~/.local/bin/cloudflared (linux-arm64) | 0 | installed; first flag guess --no-certificate-issuer invalid (help exit 2); retried no-extra-flag |
-| 2026-09-09 05:11 | s009 | :4447 | scripts/start-tunnel.sh --url http://localhost:4447 (pid 2417167) | 0 | QUICK TUNNEL https://surgeon-waiver-bell-imagination.trycloudflare.com (conn hkg01 quic); ICMP ping WRN harmless; verified via tunnel: /login 200, /sw.js 200 text/javascript, / 401 |
-| 2026-09-09 05:12 | s009 | :4447 | NOTE: trycloudflare URL is ephemeral — dies when cloudflared stops; changes each restart. For persistent HTTPS use named CF tunnel or Tailscale. | 0 | recorded |
-| 2026-09-09 06:40 | s010 | fork | investigate: REPRO authenticated GET /api/reference -> 500 UnknownError err_* (via tunnel + localhost:4447) | 0 | every location-scoped v2 endpoint 500s; /api/session 200; official :4445 (Basic auth) all 200 |
-| 2026-09-09 06:55 | s010 | fork | restart :4447 with --print-logs --log-level DEBUG (pid 2478777) | 0 | log shows `TypeError: undefined is not an object (evaluating 'a.name')` at effect resolve in LayerNode hoist/compile |
-| 2026-09-09 07:05 | s010 | fork | run server from source: bun run ./src/index.ts web --port 4448 | 0 | /api/reference 200 -> compiled-binary-only bug |
-| 2026-09-09 07:10 | s010 | fork | git worktree add /tmp/opencode/base-ecbc6cc ecbc6cc; bun install; build --single | 0 | pristine upstream binary ALSO 500s -> NOT a fork regression = toolchain bug |
-| 2026-09-09 07:20 | s010 | fork | download bun 1.3.14 (repo packageManager pin) -> /tmp/opencode/bun-1.3.14; rebuild fork --skip-install | 0 | /api/reference + all v2 endpoints 200 on :4453 |
-| 2026-09-09 07:26 | s010 | fork | test /api/push/* on builds | 0 | FOUND 2nd bug: authenticated /api/push/pubkey 500 `Service not found: @opencode/Push` (from source AND compiled) — FE-005 never was live; s009 only tested 401 gate |
-| 2026-09-09 07:40 | s010 | fork | fix packages/opencode/src/server/push/route.ts: resolve Push.Service at router-build time, close over in handlers (docRoute/uiRoute pattern) | 0 | typecheck clean; from-source :4448: pubkey 200+VAPID, subscribe/unsubscribe 200, unauth 401; /api/reference still 200 |
-| 2026-09-09 07:36 | s010 | scripts | rewrite scripts/build-linux.sh to pin bun@1.3.14 (downloads to ~/.cache/opencode-build, OS/arch via uname) | 0 | rebuild produced 0.0.0-dev-202609090736 |
-| 2026-09-09 07:40 | s010 | :4447 | restart :4447 with rebuilt 1.3.14 binary (pid 2485843) | 0 | login 200, sw.js 200, manifest 200, root 401, unauth pubkey 401; auth: pubkey/reference/agent/model/fs/integration/session/all 200; subscribe/unsubscribe 200 |
-| 2026-09-09 07:45 | s010 | fork | git commit "fix(server): resolve Push.Service at router build..." -> 40b1633; push origin dev | 0 | e0511c4..40b1633 dev->dev; husky pre-push OK (PATH set) |
-| 2026-09-09 07:50 | s010 | tests | LANG=C bun test packages/opencode | 0 | 3527 pass / 22 skip / 45 fail — faails all pre-existing env (ACP/TUI/plugin/network/locale); project-copy passes with LANG=C; none touch push/httpapi |
-| 2026-09-09 08:00 | s010 | tunnel | re-verify quick tunnel end-to-end | 0 | login 302, pubkey 200, /api/reference 200, /sw.js 200; tunnel pid unchanged; :4445 untouched |
-| 2026-09-09 08:05 | s010 | state | clean test subs: reset ~/.local/state/opencode/push/subscriptions.json -> [] | 0 | notifier won't retry fake endpoints |
-| 2026-09-09 09:00 | s010 | app | BUG: web mobile "thinking" never dismisses after response completes | 0 | reproduced logic-level: /global/event delivers session.status idle live, but mobile suspension kills SSE -> idle event lost -> store stuck busy |
-| 2026-09-09 09:20 | s010 | app | narrow root cause: official :4445 (v1.18.23) vs dev files identical (server-sync/session/rows/event handlers = 0 diff); only FE-003 resume+foreground refetch differ; activeSessionsQuery refetched only when data===undefined; seedActiveSessionStatuses never clears busy | 0 | confirmed version gap: official 1.18.23 OLDER than base 1.18.29; regression present in base app logic, exposed by FE-003 |
-| 2026-09-09 09:30 | s010 | app | fix server-sync.tsx: refetch activeSessionsQuery on every server.connected; seedActiveSessionStatuses clears stale busy (absent/idle on server) + unit test | 0 | 13/13 server-sync tests pass; full app unit suite 730 pass; typecheck clean |
-| 2026-09-09 09:36 | s010 | deploy | rebuild (scripts/build-linux.sh, bun 1.3.14) -> 0.0.0-dev-202609090836; restart :4447 (pid 2555290) | 0 | index asset hash changed (new UI served); reference/pubkey/sw.js/tunnel all 200 |
-| 2026-09-09 09:38 | s010 | fork | git commit "fix(app): reconcile stale busy session status on stream reconnect" -> d1389e2; push origin dev | 0 | 40b1633..d1389e2 dev->dev |
-| 2026-09-09 09:50 | s010 | diagnose | Playwright (chromium-headless-shell) drives live tunnel: prompt -> banana renders, thinking STUCK | 0 | reproduced real-world; probes (RX/EMIT/store/row) showed NO session.status ever reached the store |
-| 2026-09-09 09:57 | s010 | diagnose | curl /global/event via tunnel vs localhost | 0 | tunnel: 200 + text/event-stream headers but ZERO body bytes 25s+ (identity+gzip, h1+h2, quic+http2) -> quick tunnel buffers SSE; localhost streams instantly |
-| 2026-09-09 10:03 | s010 | deploy | relaunch cloudflared (protocol http2 then default), new URL https://orlando-expansion-thu-toxic.trycloudflare.com | 0 | old URL surgeon-waiver... dead; SSE still buffered across protocols |
-| 2026-09-09 10:05 | s010 | app | add status watchdog in server-sync.tsx: poll /session/status every 15s while any session busy (reconcile clears stale busy->idle) | 0 | typecheck + 730 unit tests pass; rebuild 0.0.0-dev-202609091003; :4447 restarted (pid 2617472) |
-| 2026-09-09 10:10 | s010 | e2e | Playwright tunnel test after watchdog | 0 | RESULT: DISMISSED (was STUCK) |
-| 2026-09-09 10:12 | s010 | fork | git commit "fix(app): periodic status watchdog so 'Thinking' clears over buffered SSE" -> 3e46b18; push origin dev | 0 | d1389e2..3e46b18 dev->dev |
-| 2026-09-09 15:20 | s011 | app | dialog-select-directory-v2.tsx: remove tappedRowPath + onContainerClick unhighlight listener | 0 | code changed |
-| 2026-09-09 15:22 | s011 | app | dialog-select-directory-v2.tsx: mount navigate -> pickerRoot(start()) so picker lists from filesystem root | 0 | code changed |
-| 2026-09-09 15:26 | s011 | verify | bun x tsgo -b (typecheck) | 0 | clean |
-| 2026-09-09 15:26 | s011 | verify | bun test directory-picker.test.ts + directory-picker-domain.test.ts | 0 | 24 pass / 0 fail |
-| 2026-09-09 15:28 | s011 | session | wrote 20-logs/sessions/2026-09-09_s011_folder-picker-simplify.md | 0 | session record |
-| 2026-09-09 16:10 | s011 | app | add reveal() in dialog-select-directory-v2.tsx; Enter fallback -> reveal(input()) so typed paths reveal-from-root instead of navigate-into | 0 | code changed (fix for ~/ typed path) |
-| 2026-09-09 16:12 | s011 | verify | bun x tsgo -b (typecheck) | 0 | clean |
-| 2026-09-09 16:12 | s011 | verify | bun test directory-picker*.test.ts + pierre-tree.test.ts | 0 | 25 pass / 0 fail |
-| 2026-09-10 16:02 | s011 | ops | discover :4447 server DEAD (pid 2790696 gone; log ends MaxListenersExceededWarning, 11 listeners) | 0 | tunnel 502 because origin down, not expiry; cloudflared still up (uptime 1d) |
-| 2026-09-10 16:39 | s011 | deploy | rebuild (bun 1.3.14) -> 0.0.0-dev-202609101639; ./scripts/run-web.sh 4447 -> pid 3453286 | 0 | smoke test passed; :4447 listening |
-| 2026-09-10 16:40 | s011 | verify | localhost + LAN + tunnel all 200 (Basic opencode:hahahaha) | 0 | tunnel URL unchanged orlando-expansion-thu-toxic; server stable, 0 MaxListeners in new log |
-| 2026-09-10 00:38 | s012 | fork | edit icon.tsx (add log-out icon), home-projects-view.tsx (logout btn above settings), i18n en.ts (logout keys) | 0 | typecheck app+ui clean; oxlint touched files 0 err; pre-existing tui-smoke lint error unrelated |
-| 2026-09-10 02:06 | s013 | app | edit session-question-dock.tsx: add useSync+Binary+produce imports, `dismiss()` helper (splice question out of store by request.id), call in reply/reject `onSuccess` | 0 | root cause: dock dismissed only via SSE question.replied; lost event (tunnel/SSE buffering/mobile suspend) = dock stuck even though reply 200 |
-| 2026-09-10 02:06 | s013 | verify | bun run typecheck (packages/app, tsgo -b) | 0 | clean |
-| 2026-09-10 02:06 | s013 | verify | bunx oxlint packages/app/.../session-question-dock.tsx (from repo root) | 0 | 0 errors; 3 pre-existing no-unnecessary-boolean-literal-compare warnings (lines 98/160/283, not mine) |
-| 2026-09-10 02:06 | s013 | verify | bun run test:unit (packages/app) | 1 | 729 pass / 1 fail (730) — FAIL = i18n parity (s012 logout keys missing in 65 locales, pre-existing, unrelated to this change); flagged FU-026 |
-| 2026-09-10 02:06 | s013 | verify | bun test event-reducer.test.ts | 0 | 16 pass (question asked/replied/rejected store logic intact) |
-| 2026-09-10 02:21 | s013 | FU-027 | edit session-composer-state.ts decide(): on successful permission.reply -> sync().set permission splice-out (same pattern as question dock) | 0 | permission dock now dismisses on server-confirm, independent of SSE |
-| 2026-09-10 02:21 | s013 | FU-026 | python script: insert sidebar.logout + sidebar.logoutConfirm (English fallback) into all 61 app-locale files after sidebar.settings | 0 | 61 patched, 0 skipped, 0 no-anchor; format verified (2-space indent, key ordering matches en.ts) |
-| 2026-09-10 02:21 | s013 | verify | bun test src/i18n/parity.test.ts | 0 | 5 pass / 0 fail (979 expect) |
-| 2026-09-10 02:21 | s013 | verify | bun run test:unit (packages/app) | 0 | 730 pass / 0 fail — FULL suite green |
-| 2026-09-10 02:21 | s013 | verify | bun run typecheck (packages/app) + oxlint session-composer-state.ts, session-question-dock.tsx | 0 | typecheck clean; oxlint 0 errors (4 pre-existing warnings, none added) |
-| 2026-09-10 16:50 | s014 | app | titlebar-tab-nav.tsx: remove tab-close IconButtonV2 block from TabNavItem + DraftTabItem; drop unused import | 0 | code changed |
-| 2026-09-10 16:51 | s014 | app | titlebar-tab-nav.css: remove dead [data-slot="tab-close"] rules (positioning/hover/edit/narrow) | 0 | code changed |
-| 2026-09-10 16:51 | s014 | verify | bun x tsgo -b (packages/app) | 0 | clean |
-| 2026-09-10 16:52 | s014 | verify | bun test titlebar-tab-gesture/order/session-events/history | 0 | 12 pass / 0 fail |
-| 2026-09-10 16:53 | s014 | deploy | rebuild (bun 1.3.14) -> 0.0.0-dev-202609101653; restart :4447 -> pid 3482759 | 0 | smoke test passed |
-| 2026-09-10 16:54 | s014 | verify | localhost + LAN + tunnel all 200 (Basic opencode:hahahaha) | 0 | deployed on same tunnel URL |
-| 2026-09-11 09:00 | s015 | implement | add `pages/home/home-projects-list.tsx` (tab-2 rich project list) | 0 | new file; reuses existing i18n keys, no locale churn |
-| 2026-09-11 09:05 | s015 | implement | restructure `pages/home.tsx`: SegmentedControlV2 (Projects / Recent projects) | 0 | tab 1 = original grid (unchanged), tab 2 = new list; default = Projects |
-| 2026-09-11 09:10 | s015 | verify | `bun run typecheck` (app pkg) | 0 | pass |
-| 2026-09-11 09:11 | s015 | verify | `bun test ./src/i18n/parity.test.ts` | 0 | 5 pass (no new keys added) |
-| 2026-09-11 09:12 | s015 | verify | `bun run test:unit` (app pkg) | 0 | 730 pass / 0 fail |
-| 2026-09-11 09:15 | s015 | verify | `bun run build` (vite, app pkg) | 0 | dist built cleanly |
-| 2026-09-11 09:18 | s015 | build | `./scripts/build-linux.sh` (bun 1.3.14, --single) | 0 | 0.0.0-dev-202609110917 smoke passed |
-| 2026-09-11 09:19 | s015 | deploy | kill pid 3482759; start new binary `web --port 4447` -> pid 3931112 | 0 | login 200; unauthenticated / 401 (FE-001 intact); unread-dot marker present in binary bundle |
-| 2026-09-11 09:35 | s015 | implement | replace `home-projects-list.tsx` with `home-sessions-table.tsx` (tab 2 = all sessions across projects, sorted by last prompt) | 0 | per user: tab 2 should list sessions, not projects |
-| 2026-09-11 09:38 | s015 | verify | `bun run typecheck` (app pkg) | 0 | pass |
-| 2026-09-11 09:39 | s015 | verify | `bun run test:unit` (app pkg) | 0 | 730 pass / 0 fail |
-| 2026-09-11 09:41 | s015 | verify | `bun run build` (vite, app pkg) | 0 | built; entry `index-B_vKqqo6.js` contains `home-session-table-row` |
-| 2026-09-11 09:43 | s015 | build | `./scripts/build-linux.sh` (bun 1.3.14, --single) | 0 | 0.0.0-dev-202609110943 smoke passed |
-| 2026-09-11 09:47 | s015 | deploy | kill pid 3931112; start new binary `web --port 4447` -> pid 3936444 | 0 | login 200; unauth / 401; served entry `index-B_vKqqo6.js` contains `home-session-table-row`; log clean |
-| 2026-09-11 10:05 | s015 | implement | v2: cross-folder sessions — `projectDirectories` = all projects, `showProjectName` = true, default tab = Sessions | 0 | eliminates folder pre-selection; `open` already auto-selects folder via `ctx.projects.open` |
-| 2026-09-11 10:08 | s015 | verify | `bun run typecheck` (app pkg) | 0 | pass |
-| 2026-09-11 10:09 | s015 | verify | `bun run test:unit` (app pkg) | 0 | 730 pass / 0 fail |
-| 2026-09-11 10:10 | s015 | verify | `bun run build` (vite, app pkg) | 0 | built; entry `index-DAfrQCc3.js` |
-| 2026-09-11 10:11 | s015 | build | `./scripts/build-linux.sh` (bun 1.3.14, --single) | 0 | 0.0.0-dev-202609111011 smoke passed |
-| 2026-09-11 10:12 | s015 | deploy | kill pid 3936444; start new binary `web --port 4447` -> pid 3965756 | 0 | login 200; unauth / 401; served entry `index-DAfrQCc3.js` contains `home-session-table-row`; log clean |
-| 2026-09-11 10:22 | s015 | refactor | v3: decouple tabs. Revert shared controller (projectDirectories/showProjectName) to original; new `home-sessions-table-controller.tsx` (own query/records/open/isOpenTab); home.tsx Sessions tab uses tableSessions | 0 | Projects tab preserved exactly; Sessions tab independent |
-| 2026-09-11 10:25 | s015 | verify | `bun run typecheck` (app pkg) | 0 | pass |
-| 2026-09-11 10:26 | s015 | verify | `bun run test:unit` (app pkg) | 0 | 730 pass / 0 fail |
-| 2026-09-11 10:28 | s015 | build | `./scripts/build-linux.sh` (bun 1.3.14, --single) | 0 | 0.0.0-dev-202609111028 smoke passed |
-| 2026-09-11 10:29 | s015 | deploy | kill pid 3965756; start new binary `web --port 4447` -> pid 3967592 | 0 | login 200; unauth / 401; served entry `index-CAzbSeqL.js` contains `home-session-table-row`; log clean |
-| 2026-09-12 09:00 | s016 | research | explore: session list components in fork `packages/app` (sidebar-items.tsx, sidebar-workspace.tsx, message/part store shapes) | 0 | SessionRow renders title only; last user prompt extractable client-side from `data.message` + `data.part` |
-| 2026-09-12 09:15 | s016 | app | write `packages/app/src/utils/session-last-prompt.ts` | 0 | New util: newest user message text part, whitespace-normalized |
-| 2026-09-12 09:18 | s016 | app | edit `packages/app/src/pages/layout/sidebar-items.tsx` (SessionRow subtitle + SessionItem lastPrompt memo + tooltip) | 0 | Subtitle under title, dense-gated; tooltip = title\nprompt |
-| 2026-09-12 09:25 | s016 | app | write `packages/app/src/utils/session-last-prompt.test.ts` | 0 | 7 unit tests |
-| 2026-09-12 09:30 | s016 | verify | `bun run typecheck` (packages/app) | 0 | pass after fixing `textPart.text` narrowing + test fixture typing |
-| 2026-09-12 09:35 | s016 | verify | `bun test src/utils/session-last-prompt.test.ts` (packages/app) | 0 | 7 pass / 0 fail |
-| 2026-09-12 09:38 | s016 | verify | `bun run test:unit` (packages/app) | 0 | 737 pass / 0 fail |
-| 2026-09-12 09:40 | s016 | docs | write session record s016, p003 `sessions/fe-006-session-list-last-prompt.md`, update p003 README (FE-006), current-state.md, open-followups (FU-030/031, FU-029 note), decisions-log.md | 0 | Bookkeeping complete |
-| 2026-09-12 10:05 | s017 | explore | read s014 session record (titlebar X removal) + titlebar.tsx/titlebar-tab-nav.tsx close patterns; message-timeline.tsx header layout | 0 | Close = useTabs().store.findIndex + closeTab(index); chat header 3-dots menu at message-timeline.tsx ~1563 |
-| 2026-09-12 10:25 | s017 | app | edit `packages/app/src/pages/session/timeline/message-timeline.tsx` (closeSessionTab handler + xmark IconButtonV2 + TooltipV2 + imports) | 0 | Close button added right of 3-dots trigger in both layout variants |
-| 2026-09-12 10:30 | s017 | verify | `bun x tsgo -b packages/app` + `bun x oxlint message-timeline.tsx` | 0 | typecheck clean; no new lint warnings |
-| 2026-09-12 10:05 | s016 | app | edit `packages/app/src/pages/layout.tsx` — prefetch queue items carry `{id,limit,keep}`; `prefetchSession` gains `{limit,maxPerDir}` opts; new bulk effect on `currentSessions()` enqueues all visible sessions at `previewLimit=20`, cap 25/folder; `markPrefetched` eviction keep-count per item; `prefetchPendingLimit` 10→30 | 0 | Bulk async preview pass implemented |
-| 2026-09-12 10:10 | s016 | verify | `bun run typecheck` (packages/app) | 0 | pass |
-| 2026-09-12 10:11 | s016 | verify | `bun run test:unit` (packages/app) | 0 | 737 pass / 0 fail |
-| 2026-09-12 10:12 | s016 | docs | update session record s016 (addendum), p003 `sessions/fe-006-*`, p003 README FE-006, open-followups FU-030 note | 0 | Bookkeeping refreshed |
-| 2026-09-12 10:34 | s016 | build | `./scripts/build-linux.sh` (bun 1.3.14) | 0 | 0.0.0-dev-202609120234; smoke ok |
-| 2026-09-12 10:36 | s016 | deploy | kill pid 3967592; `./scripts/run-web.sh 4447` | 0 | new pid 219946; unauth / 401; /login 200; authed root 200; served index-BV48gH_b.js (old was index-CAzbSeqL.js); bundle grep: lastPrompt + text-text-secondary present; log clean |
-| 2026-09-12 10:50 | s016 | app | edit `home-sessions-table-controller.tsx` — concurrency-limited preview prefetch (limit 20, concurrency 3) for all table records via `useServerSync().session.prefetch/shouldPrefetch`; edit `home-sessions-table.tsx` — row shows real last prompt subtitle (`sessionLastPrompt`) under title | 0 | FU-031 implementation (real prompt in home Sessions tab) |
-| 2026-09-12 10:55 | s016 | verify | `bun run typecheck` (packages/app) | 0 | pass |
-| 2026-09-12 10:56 | s016 | verify | `bun run test:unit` (packages/app) | 0 | 737 pass / 0 fail |
-| 2026-09-12 10:59 | s016 | build | `./scripts/build-linux.sh` (bun 1.3.14) | 0 | 0.0.0-dev-202609120259; smoke ok |
-| 2026-09-12 11:00 | s016 | deploy | kill pid 219946; `./scripts/run-web.sh 4447` | 0 | new pid 248812; authed root 200; served index-DhhfqPa8.js; bundle grep: home-session-row-prompt + lastPrompt present; log clean |
-| 2026-09-12 12:40 | s018 | explore | toolchain check: bun 1.4.2 installed vs pinned 1.3.14; build-linux.sh pins 1.3.14 (DEC-016/DEC-015) | 0 | Must build with pinned bun 1.3.14 |
-| 2026-09-12 12:50 | s018 | app | edit `packages/app/src/pages/home/home-sessions-table.tsx` — HomeSessionTableRow → 3-line mobile card (items-start; title 2-line clamp + time top-right; project muted line w/ v2 folder icon; prompt preview 2-line clamp) + import Icon v2 | 0 | FE-007 markup change shipped |
-| 2026-09-12 12:52 | s018 | verify | `bun run typecheck` (packages/app) | 0 | pass |
-| 2026-09-12 12:53 | s018 | verify | `bun x oxlint packages/app/src/pages/home/home-sessions-table.tsx` | 0 | 0 warnings / 0 errors |
-| 2026-09-12 12:54 | s018 | verify | `bun run test:unit` (packages/app) | 0 | 737 pass / 0 fail |
-| 2026-09-12 13:35 | s018 | build | `./scripts/build-linux.sh` (pinned bun 1.3.14) | 0 | 0.0.0-dev-202609120534; smoke ok |
-| 2026-09-12 13:38 | s018 | deploy | kill pid 248812; `./scripts/run-web.sh 4447` | 0 | new pid 305738; unauth / 401 (FE-001 login active); server log clean; binary grep: `items-start justify-between gap-3` present → FE-007 markup compiled in |
-| 2026-09-12 13:45 | s018 | docs | write s018 record (`20-logs/sessions/2026-09-12_s018_home-sessions-row-mobile-card.md`), p003 `sessions/fe-007-home-sessions-row.md`, update p003 README (FE-007), current-state.md (s018 addendum), open-followups (FU-028 scope + FU-032), decisions-log.md (DEC-020) | 0 | Bookkeeping complete |
-| 2026-09-12 14:10 | s019 | explore | reproduce: analyze session chat page height chain (index.html #root h-dvh → index.css standalone override 100vh) | 0 | Root cause: `@media (display-mode: standalone) #root { height:100vh }` overrides h-dvh; on mobile fullscreen 100vh = large viewport > visible screen → overflow. Not related to FE-006 |
-| 2026-09-12 14:12 | s019 | app | edit `packages/app/src/index.css` — standalone #root: `100vh` → `100svh; 100dvh` (keep edge-to-edge intent, clamp to visible screen) | 0 | FE-008 proposed; CSS-only |
-| 2026-09-12 14:40 | s020 | app | write `packages/app/src/components/drag-down-gesture.ts` (pure pull state machine: PULL_THRESHOLD=56, ARM_DISTANCE=10, AXIS_FACTOR=1.5) + `drag-down-gesture.test.ts` | 0 | FE-009; 6 tests pass (arm/reset/threshold/axis dominance) |
-| 2026-09-12 14:45 | s020 | app | write `packages/app/src/components/drag-down-menu.tsx` (DragDownMenu + DragDownAction; pointer capture + makeEventListener; menu-v2 data-attrs) | 0 | FE-009; icons in item-content not indicator slot; outer positioning div avoids transform clash |
-| 2026-09-12 14:50 | s020 | app | edit `packages/app/src/components/titlebar-tab-strip.tsx` (import DragDownMenu; dragActions = reload+logout; wrap tabs in DragDownMenu class="relative min-w-0") | 0 | FE-009 wired at integration point |
-| 2026-09-12 14:55 | s020 | i18n | `/tmp/opencode/add-i18n-key.cjs` insert `common.reload` after `common.open` (en + 61 locales, 62 dicts) | 0 | in all 62 dicts; parity preserved |
-| 2026-09-12 15:00 | s020 | verify | `tsgo -b` (packages/app, via bun shim PATH) | 0 | typecheck clean, no output |
-| 2026-09-12 15:05 | s020 | verify | `bun test` drag-down-gesture.test.ts (6) + i18n/parity.test.ts (5) | 0 | 11 pass (gesture 6 + parity 5); titlebar/session suites green earlier |
-| 2026-09-12 15:10 | s020 | verify | `~/.bun/bin/bun run build` (packages/app) | 0 | production vite build OK; bundle index-D9tRSA9c.js contains `drag-down` + `common.reload` |
-| 2026-09-12 15:15 | s020 | docs | update session record s020 addendum, command-log, current-state.md, open-followups FU-034 | 0 | bookkeeping complete; not deployed (FU-034) |
-| 2026-09-12 07:54 | s021 | app | explore titlebar-tab-nav/strip + DialogV2 + ButtonV2 + i18n keys (read-only) | 0 | confirmed TabNavItem.closeTab wiring, dialog components, parity-guaranteed keys (common.closeTab/cancel/close, ui.common.confirm) |
-| 2026-09-12 08:02 | s021 | app | edit titlebar-tab-nav.tsx: confirmCloseOpen signal + closeTab() opens dialog (was props.onClose) | 0 | FE-010; all close paths now route through confirm: menu item, onAuxClick middle-click |
-| 2026-09-12 08:10 | s021 | app | edit titlebar-tab-nav.tsx: long-press handlers (500ms timer, >10px move cancels, drag/edit guards) + touch contextmenu suppression | 0 | play with touch/mouse long-press; native mobile contextmenu blocked while dialog pending/open |
-| 2026-09-12 08:20 | s021 | app | edit titlebar-tab-nav.tsx: DialogV2 confirm dialog (DialogRoot open/onOpenChange; Cancel common.cancel / Confirm ui.common.confirm; body = session title) | 0 | no new i18n keys — no locale files touched; parity preserved |
-| 2026-09-12 08:25 | s021 | verify | `bun run typecheck` (packages/app, tsgo -b) | 0 | clean |
-| 2026-09-12 08:30 | s021 | verify | `bun run lint` on titlebar-tab-nav.tsx (oxlint) | 0 | 0 errors, 6 pre-existing consistent-return warnings |
-| 2026-09-12 08:35 | s021 | verify | `bun test` titlebar-tab-gesture + titlebar-tab-order | 0 | 7 pass |
-| 2026-09-12 09:46 | s021 | fork | ./scripts/build-linux.sh (pinned bun 1.3.14) | 0 | built opencode-linux-arm64 binary 0.0.0-dev-202609120946 (184MB); smoke test --version passed |
-| 2026-09-12 09:48 | s021 | :4447 | kill 305738 (old opencode web) | 0 | port 4447 released |
-| 2026-09-12 09:48 | s021 | :4447 | OPENCODE_SERVER_PASSWORD=hahahaha ./scripts/run-web.sh 4447 | 0 | new pid 456022; `/login` 200, `/` 401, `/sw.js` 200 — FE-010 + FE-008 + FE-009 live |
-| 2026-09-12 09:50 | s021 | docs | session record s021 + current-state s021 addendum + open-followups FU-033/034 resolved, FU-035/036 added | 0 | protocol close-out complete |
-| 2026-09-12 10:05 | s022 | app | edit message-timeline.tsx: add session.slim.title i18n key + slim button (IconV2 "collapse") + slimSession handler (compact → wait → create+rename new session → navigate+focus → sendFollowupDraft) | 0 | FE-011 client-only |
-| 2026-09-12 10:06 | s022 | i18n | add session.slim.title key to en.ts + 61 locale files after session.error.serverConnection | 0 | parity test 5/5 pass |
-| 2026-09-12 10:08 | s022 | verify | `bun run --cwd packages/app typecheck` (tsgo -b) | 0 | clean |
-| 2026-09-12 10:09 | s022 | verify | `bun test` i18n/parity.test.ts | 0 | 5 pass |
-| 2026-09-12 10:10 | s022 | verify | `bun run test:unit` (packages/app, --only-failures) | 0 | 743 pass / 0 fail |
 | 2026-09-12 10:11 | s022 | verify | `bun run lint` (oxlint) | 0 | message-timeline back to 23 baseline refs; 0 new |
 | 2026-09-12 10:13 | s022 | build | `bunx vite build` (packages/app) | 0 | production bundle compiles clean |
 | 2026-09-12 10:02 | s023 | verify | `bun run typecheck` packages/core + packages/opencode (tsgo --noEmit) | 0 | clean — prior 3 errors (prompt.ts parts, fake provider) already fixed; visual_model edits intact |
@@ -512,3 +253,18 @@
 | 2026-09-16 21:01 | s044 | edit | layout-new.tsx: pass debugTools unconditionally | 0 | DEV badge now renders clickable DropdownMenu (Home page/Refresh/Debug tools) |
 | 2026-09-16 21:02 | s044 | typecheck | cd packages/app; bun run typecheck | 0 | clean |
 | 2026-09-16 21:03 | s044 | deploy | bash scripts/deploy-web-4447.sh --detach | 0 | rebuilt 0.0.0-mark-dev-202609161421; PID 3434396 on :4447 |
+| 2026-09-16 22:40 | s045 | diag | curl /__debug + login cookie | 0 | sink works auth-gated (204); live bundle index-f5wVUSxu.js has syncQuestions/__debug |
+| 2026-09-16 22:41 | s045 | diag | curl GET /api/question/request | 0 | {"data":[]} — no pending question at probe time; API OK |
+| 2026-09-16 22:55 | s045 | edit | foreground-debug.ts: remove localStorage gate (always-on) | 0 | debugLog always POSTs /__debug |
+| 2026-09-16 22:56 | s045 | edit | directory-sync.ts syncQuestions + try/catch + richer debug | 0 | typecheck clean |
+| 2026-09-16 22:57 | s045 | edit | directory-layout.tsx lyt:state; composer-state questionRequest log; question-dock dock:mounted | 0 | typecheck clean |
+| 2026-09-16 22:58 | s045 | typecheck | bun run typecheck (bun 1.3.14 tsgo) | 0 | clean |
+| 2026-09-16 23:00 | s045 | build | bash scripts/build-linux.sh | 0 | 0.0.0-mark-dev-202609161500 |
+| 2026-09-16 23:01 | s045 | deploy | bash scripts/deploy-web-4447.sh --detach | 0 | 0.0.0-mark-dev-202609161501; PID 3466112 on :4447 |
+| 2026-09-16 23:02 | s045 | verify | curl live bundle /__debug probe | 0 | index-BL0wOlIl.js has composer:questionRequest/dock:mounted, no gate string; probe logged in web-4447.log |
+| 2026-09-16 23:10 | s045 | diag | read testing/web-4447.log phone-test __debug rows | 0 | dock:mounted while bg; foreground dir:syncQuestions protocol=v1 all=0 → lyt:state questionStore=0 → dialog wiped by reconcile([]) |
+| 2026-09-16 23:12 | s045 | rootcause | trace syncQuestions v1 branch + WorkspaceRoutingMiddleware + detectServerProtocol | 0 | v1 branch = serverSDK.client.question.list() NO directory → server default workspace testing/ → [] |
+| 2026-09-16 23:15 | s045 | edit | directory-sync.ts syncQuestions: pass {directory} in v1 branch; add fetched guard (skip reconcile on failure) | 0 | typecheck clean |
+| 2026-09-16 23:18 | s045 | deploy | bash scripts/deploy-web-4447.sh --detach | 0 | 0.0.0-mark-dev-202609161521; PID 3468506 on :4447 |
+| 2026-09-16 23:20 | s045 | verify | login + curl live bundle + /__debug probe | 0 | index-BPKpEQSx.js has question.list({directory:e}) + fetched gate; probe 204 |
+| 2026-09-16 23:40 | s046 | verify | user phone retest after s046 fix | 0 | "it works now" — FU-050 RESOLVED; dialog survives background→foreground |
