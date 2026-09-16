@@ -597,3 +597,44 @@ Format:
   brand-new folder + immediate submit could still race; if it ever shows up in the field, await the
   bootstrap promise (or sequence `tabs.updateDraft` after it) in `selectProject`'s draft branch. Retest
   pending (FU-046).
+
+### DEC-030 — On an up-walk, an unreadable parent is "no config there", not a server error (2026-09-14, s034)
+- **Decision:** `FSUtil.up` (`packages/core/src/fs-util.ts`) now probes each candidate with
+  `existsSafe` (any error ⇒ `false`) instead of raw `fs.exists`. During config/git/location discovery
+  the walk ascends from the routed directory up to the stop dir probing `.git`, `.opencode`,
+  `opencode.json`, `opencode.jsonc`. When the server user cannot traverse a parent (root-owned
+  `drwx------` dirs like `/root` or `/lost+found`), `fs.exists` yields `PlatformError: PermissionDenied`
+  which, crossing a `.orDie` in config load, became a **die** → every routed endpoint
+  (`/file`, `/config`, `/session`, `/event`) returned 500 with a masked ref.
+- **Rationale:** the folder picker legitimately browses to the filesystem root and lists root-owned
+  dirs; selecting/expanding one must not cripple the whole routed request. `existsSafe` treats a
+  permission-denied stat exactly like a missing path — the safest fallback for discovery probes,
+  and it matches the pre-existing intent (the same `existsSafe` is already used for home-dir probing).
+- **Alternatives rejected:** catching the die at `config` load only (fixes only one of the many
+  up-walk callers: `Project.resolve`/git discovery run the same walk); widening `file.list`'s
+  kill-switch fallback (the 500 wasn't `/file`-specific); surfacing 403 to the UI (breaks the picker's
+  browse-root UX and adds an error channel for a non-actionable condition).
+- **Consequences / revisit when:** unreadable dirs now render as **empty folders** in the picker
+  rather than 500ing. Also added `Project.resolve` `Effect.catchCause` around `git.repo.discover` as
+  defense-in-depth (degrades to global project on any discover failure). No behavior change for
+  readable dirs. If a user genuinely needs to *select* `root`/`lost+found` as their project the empty
+  listing is still acceptable UX and server-side operations for it will surface real permission errors
+  where they matter (file writes), not in listing.
+
+### DEC-031 — FE-003 gap: decision dock (question store) re-synced on foreground (2026-09-16, s039)
+- **Decision:** the foreground re-sync (DEC-013) only force-synced session **messages**; the question
+  store (`data.question`, which drives `SessionQuestionDock`) is mutated only by live SSE event handlers
+  (`question.asked/replied/rejected`) or a full bootstrap (runs only on fresh `server.connected`). So a
+  question asked while backgrounded stayed invisible after unlock if the stream never restarted. Fix:
+  `directory-sync.ts` gains `session.syncQuestions(sessionID)` — v1: `serverSDK.client.question.list()`;
+  v2: `serverSDK.api.question.request.list({ location: { directory } })` — filtered to the session via new
+  pure helper `sessionPendingQuestions` and written back with the same merge-safe
+  `set("question", sessionID, reconcile(...))` path the tab switch / bootstrap use (stale entries dropped).
+  `directory-layout.tsx` foreground handler now calls it alongside the existing force-sync.
+- **Rationale:** the stream-restart guard (>20 s silence) is exactly right for chat, but a "healthy" stream
+  is precisely the case where the message list stays current and the question dock does not — the two
+  refresh on different stores. Fetching pending questions from server state is idempotent and small.
+- **Alternatives rejected:** extending the SSE restart to always fire on foreground (needlessly churns the
+  stream, and a restarted stream does not replay missed `question.asked` anyway); server-side buffering/push.
+- **Consequences / revisit when:** decision dock self-heals on return to foreground. Deploy + on-device
+  retest pending (FU-050).

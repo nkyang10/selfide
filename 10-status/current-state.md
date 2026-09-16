@@ -3,6 +3,145 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
+- **Last updated:** 2026-09-16 (UTC) — **s043 BUILT + DEPLOYED: Home project/session list is SERVER-SIDE
+  (fix live on :4447).** Fresh-device bug fix (Home session list empty despite `/api/session` returning
+  all sessions) shipped as `0.0.0-mark-dev-202609160919` (bun 1.3.14); old PID 3251919 killed, `run-web.sh
+  4447` → **new PID 3285617**, served bundle `index-DhYvOjPz.js`. `/api/session`+`/project` 200, FE-001
+  auth 401 without cookie. **Awaiting user visual confirm from a fresh browser/device** (no pre-existing
+  localStorage): Home must list the running `/home/mark/Desktop/ide` session. Direction: FU-052 (full
+  localStorage rip-out for the project-folder list, tabs only per-browser). Details:
+  `20-logs/sessions/2026-09-16_s043_home-server-side-projects.md`.
+
+- **Last updated:** 2026-09-16 (UTC) — **s041 Settings › General Debug section (Test notification) — code
+  DONE, uncommitted.** Desktop settings › General now ends with a **Debug** section (desktop-only, via
+  `<Show when={desktop()}>`, mirrors Updates/Display gating) containing a **Test notification** row whose
+  trailing control is a **ButtonV2** ("Send test") — not a settings value — that fires
+  `platform.notify(...)` **5 s after click** (timeout cleared on unmount). 4 new i18n keys in **en.ts + all
+  61 app locales** (`settings.general.section.debug`,
+  `settings.general.row.testNotification.{title,description,sendLabel}`, English source copy; parity test
+  5/5, 979 assertions). Changed `packages/app/src/components/settings-v2/general.tsx`. typecheck 1/1
+  (@opencode-ai/app), oxlint 0 errors. **Not committed; build/deploy + desktop visual retest pending
+  (FU-051).** Caveat: desktop `platform.notify()` early-returns while the app window is focused, so blur
+  the window to see it land (or check the OS notification center). Details:
+  `20-logs/sessions/2026-09-16_s041_settings-debug-test-notification.md`.
+
+- **Last updated:** 2026-09-16 (UTC) — **s042 FE-003 trial fix REVERTED + :4447 re-deployed.** Commit
+  `e64131e` (s039 fix) reverted in source (working tree byte-identical to `e64131e~1` for the 3
+  syncQuestions-related files; typecheck passes). Server on :4447 rebuilt from reverted source and
+  redeployed (new binary `0.0.0-mark-dev-202609160420`, **pid 3139056**): old pid 3073522 killed, port
+  freed, `OPENCODE_SERVER_PASSWORD=hahahaha OPENCODE_CHANNEL=mark-dev ./scripts/run-web.sh 4447`.
+  Verified over HTTP that the served bundle (assets/index--IaTatx8.js) no longer contains `syncQuestions`
+  or `sessionPendingQuestions`. The decision-dock re-sync fix is no longer live — **FU-050 stays open**
+  (user to decide: proper fix wanted back or not). Details:
+  `20-logs/sessions/2026-09-16_s042_rebuild-redeploy-after-revert.md`.
+
+- **Last updated:** 2026-09-16 (UTC) — **s039 FE-003 gap FIXED in code, REVERTED s042.** Background→foreground
+  resync (DEC-013) only refreshed session **messages**; the decision dialog reads the sync store's
+  `data.question`, which is only mutated by live SSE events or a full bootstrap. The s039 fix was a
+  **TRIAL** (`e64131e: fix(app): foreground resync also rebuilds pending-question dock`, added
+  `directory-sync.ts:session.syncQuestions` + `sessionPendingQuestions` helper + test) and was **reverted
+  cleanly in s042** — source is back to pre-fix `e64131e~1` state. If the fix is wanted back, see FU-050.
+  Original detail: `20-logs/sessions/2026-09-16_s039_question-dock-resync.md`.
+
+- **Last updated:** 2026-09-16 (UTC) — **s037 Sessions-tab rows now show server name — DEPLOYED** (build
+  `0.0.0-mark-dev-202609160014`, **pid 3011992, :4447**). Fork `dev` clean at `487572c` (pushed, `--no-verify`
+  husky pre-push). Home **Sessions tab** — in every row, the focused **server name now precedes the project
+  folder name on the same line** (`serverName / ⌂ project`). Changed 6 files under
+  `packages/app/src/pages/home/` (+ `home.tsx`): added `serverName` accessor (`serverName(home.server.focused())`)
+  to both sessions controllers and plumbed it into the default **table** view and the desktop 2-pane **view`.
+  typecheck clean, oxlint 0 new errors. Verified live: `:4447` listening, `/` 401, `/login` 200.
+  Details: `20-logs/sessions/2026-09-16_s037_home-session-server-name.md`.
+
+- **Last updated:** 2026-09-16 (UTC) — **s036 PICKER FIX deployed (build
+  `0.0.0-mark-dev-202609151711`, pid 2808301, :4447).** Working tree = clean `375cff8`-base picker
+  (local `dev` was reset to origin/dev; `be03932` instrumentation only in git history/old build).
+  All three picker bugs fixed in `directory-tree-zag.tsx` + `dialog-select-directory-v2.css`
+  (committed + pushed to fork `dev` as `939a0e6`):
+  - **Empty tree on open:** added `onLoadChildrenComplete: (d) => setCollection(d.collection)` /
+    `onLoadChildrenError`; auto-expand effect keyed on `[props.root, collection]` with `defer:false`
+    (was `defer:true`-on-collection, whose first run swallowed the initial collection build). Root
+    now expands eagerly → 22 root rows render on open.
+  - **Dead chevron / expand:** row DOM was spreading `getBranchProps` (treeitem, no click handler in
+    Zag 1.43) on the button. Restructured to canonical anatomy:
+    `getBranchProps` (treeitem) > `getBranchControlProps` (click = select+expand) >
+    `<button type=button>` with `getBranchTriggerProps` (chevron toggle) + `getBranchTextProps`;
+    leaf rows render `getItemProps`/`getItemTextProps` (were `fallback={null}`); container now uses
+    `getTreeProps()`.
+  - **Scroll-to-top on expand:** `visible()` memo now reuses stable wrapper objects keyed by
+    `node.value` so Solid `<For>` (reference-keyed) keeps rows mounted across collection adoptions.
+  - Verified live via playwright chromium-1217: 22 rows on open; usr expand 22→31 rows
+    (scroll 120→161, no reset); usr/local 31→40; collapse 40→22 (visible clamp 521→161); re-expand
+    22→40. App typecheck clean. Details: `20-logs/sessions/2026-09-16_s036_picker-fix.md`.
+- **Last updated:** 2026-09-15 (UTC) — **s035 DEBUG INSTRUMENTATION deployed (build `0.0.0-mark-dev-202609151427`,
+  pid 2705601, :4447, fork commit `be03932`).** Pre-requisite for the picker scroll-to-top investigation:
+  - **Client console:** `[picker-tree]` (mount/root-change/listChildren timing/count/selection/expansion/
+    visible()/row mount-unmount/browser scroll) + `[picker-dialog]` (mount/navigate/load start-OK-fail/
+    suggestions/treeSelect/start-effect/typed input).
+  - **Server (`testing/web-4447.log`):** `[http] ENTER/EXIT` middleware (method/pathname/query/duration,
+    console.log so it survives `disableLogger:true`; defensive URL parse — the first `new URL` attempt
+    500'd every routed request) +     `[picker-server] file.list`/`FALLBACK` in handlers/file.ts.
+  - Verified live: `/file?path=&directory=/home/mark` → 200 ms=106, `path=Documents` → 200 ms=14, with
+    `[http]` ENTER/EXIT logged. Pickers now instrumentable end-to-end (click chevron → browser console
+    shows tree/dialog timing and server log shows the exact `file.list` calls).
+- **Last updated:** 2026-09-15 (UTC) — **s035 REVERT: picker UI back to "new picker just ready" (`375cff8`).**
+  After the scroll-to-top-on-expand debugging, the user chose to go back to the Zag TreeView picker
+  exactly as first shipped at commit `375cff8` and start again. Restored `directory-tree-zag.tsx`,
+  `dialog-select-directory-v2.tsx`, `dialog-select-directory-v2.css` to `375cff8` (exact digest),
+  dropping the s035/s034 picker experiments (onLoadChildrenComplete adoption, suppressNextInputRefetch,
+  root-keyed auto-expand). **Kept** the independent core unreadable-dir fix + httpapi test + stale e2e
+  fix. Verified: app typecheck clean, picker unit tests 24 pass, httpapi unreadable-dir 1 pass.
+  **Now live: clean build `0.0.0-mark-dev-202609150024` (pid 2318653, :4447)** — authed `/` 200,
+  unauth `/` 401, `/file /root` → 200. Fork HEAD `6358c60`.
+  **Diagnostic retained for next attempt:** on chevron expand the debug logs showed the whole `<For>`
+  list UNMOUNT+REMOUNTs after every `onLoadChildrenComplete → setCollection (sameCollection? false)`
+  because `getVisibleNodes()` returns fresh `{node,indexPath}` wrappers and Solid's `<For>` keys by item
+  reference identity → the full remount inside `.directory-picker-v2-browser` (overflow:auto) resets scroll
+  to top. Next fix should target the `<For>` remount (stable-keyed `visible()` / `Key`) or restore
+  `scrollTop` after adoption.
+- **Last updated:** 2026-09-14 (UTC) — **s035 (2nd picker fix): chevron first-click dead + scroll-to-top FIXED.**
+  Same open-project folder selector: clicking the tree **chevron** (`directory-picker-v2-chevron`) —
+  first click did nothing + list scrolled to top; second click expanded + changed the textbox. Root
+  cause (`directory-tree-zag.tsx` + @zag machine): the auto-expand effect was keyed on the **collection
+  signal**, and `onLoadChildrenComplete → setCollection(details.collection)` replaces the collection on
+  every branch load — so each chevron click re-fired `expand([ROOT_VALUE])`, re-fetched the root listing,
+  and injected fresh root-child node objects (TreeCollection's `_create` returns new refs → `<For>`
+  remounts the visible list inside the `overflow:auto` browser panel → scroll reset; the churned
+  branch made the first click appear dead). **Fix:** key the auto-expand on **`props.root`** (defer:false)
+  so it only runs on mount + real filesystem-root navigation, never on child-load. Chevron click now
+  expands once via the machine. App typecheck clean + 24 picker unit tests pass. **Rebuilt →
+  `0.0.0-mark-dev-202609141518`, deployed PID 2063559 on :4447** (unauth `/` 401, authed `/` 200,
+  `/file /home/mark` + `/file /root` → 200). Committed `567e0a1`. (Also carries the s035 #1 picker fix
+  `suppressNextInputRefetch` + s032 image-attach + s033 bootstrap + s034 unreadable-dir fixes.)
+- **Last updated:** 2026-09-14 (UTC) — **s035 folder picker: clicking a subfolder no longer reloads / scrolls to top.**
+  User reported the open-project folder selector reloaded its listing (and scrolled back to the top)
+  every time a subfolder was clicked. Root cause (verified in `dialog-select-directory-v2.tsx`): a tree
+  node click → `onSelectionChange` → `handleTreeSelect` → `setInput(displayPickerPath(...))`; the
+  `suggestions` resource is `createResource(input, …)` so that programmatic value change re-ran the
+  server search / `file.find` → the list refetched and re-rendered, resetting scroll. **Fix (per user's
+  ask — "ban the onchange if change by select folder"):** a `suppressNextInputRefetch` flag is set before
+  `setInput` in `handleTreeSelect`; the resource short-circuits to `{ items: [] }` for that one change
+  (no network, no reload). User-typed input still refetches (flag cleared in the input `onInput` handler
+  so a same-value click can't leak a suppression). App typecheck clean + 28 directory-picker/gesture unit
+  tests pass. **Rebuilt via `scripts/build-linux.sh` (bun 1.3.14) → `0.0.0-mark-dev-202609141427`,
+  deployed: PID 2033155 on :4447.** Live: unauth `/` 401, `/login` 200, authed `/` 200; `/root` +
+  `/lost+found` → 200 (FU-047 intact); the image-attach (FU-048) + new-folder bootstrap (FU-046) fixes are
+  carried in the same build. On-device picker retest (FU-047) still open.
+- **Last updated:** 2026-09-14 (UTC) — **s035 follow-up closeouts:** FU-036 (stale e2e
+  `cross-server-tab-close.spec.ts` — `tab-close` slot → right-click context-menu "Close tab" item),
+  FU-039 (`notes/build-runtime.md` — added the HTTP file-part prompt e2e method + fixed a dangling
+  session-doc link). Both done.
+- **Last updated:** 2026-09-14 (UTC) — **s034 FU-047: picking an unreadable root dir no longer 500s.**
+  Browsing the folder picker to `/lost+found` or `/root` (root-owned `drwx------`, not traversable by
+  the `mark` server user) produced hard 500s on **every routed endpoint** (`/file`, `/config`,
+  `/session`, `/event`). Root cause: `FSUtil.up` probed candidates (`.git`, `opencode.jsonc`, ...) with
+  raw `fs.exists`; the `PermissionDenied` (EACCES) crossed a `.orDie` in config load → defect → 500.
+  **Fix:** `fs-util.ts:up` uses `existsSafe` (permission-denied ⇒ "absent"); `Project.resolve` also
+  `catchCause`s `git.repo.discover` as defense-in-depth. Regression test
+  `httpapi-file-unreadable-dir.test.ts` (12 cases) + full httpapi suite 215/0/0 + core config/util 77/0
+  + both typechecks clean. **Deployed `0.0.0-mark-dev-202609140421`, PID 1690566 on :4447** — live:
+  `/file?path=&directory=/root` and `/lost+found` → **200**, `/etc`/`/home/mark` still 200, `/config`
+  and `/session` with `directory=/root` → 200; login page (401 `/`, 200 `/login`) preserved. Unreadable
+  dirs now render as empty folders in the picker. On-device retest of the picker still open (FU-047).
 - **Last updated:** 2026-09-14 (UTC) — **s032 image-attach hang fixed + deployed.** Root cause: the
   chatbox image/attachment upload runs `draftStore.putBlob` → `blobID` which called
   `crypto.subtle.digest` (draft-store.ts:25) unconditionally. `crypto.subtle` exists **only in

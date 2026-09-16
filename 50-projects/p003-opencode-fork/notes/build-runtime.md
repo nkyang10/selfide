@@ -37,5 +37,19 @@
    `dgx-vision`) + **`visual_model: "dgx-vision/vision-model-default"`** (image-fallback routing, s023).
 4. **State:** `~/.local/share/opencode/` holds `auth.json` (provider cred for opencode-go), `opencode.db`,
    snapshots. Not replicated into this repo.
-5. **s023 feature:** `visual_model` per-turn image fallback — see `sessions/2026-09-12-visual-model-fallback.md`.
+5. **s023 feature:** `visual_model` per-turn image fallback — see
+   `../../../20-logs/sessions/2026-09-12_s023_visual-model-fallback.md`.
+
+## E2E method (HTTP file-part prompt) — s023 user-image verification
+
+To verify an image-bearing turn end-to-end on the served fork (no browser needed):
+POST a message whose last user part is a `file` part with `mime: image/png` and
+`url: data:image/...` to the session message endpoint (Basic auth `opencode`/`hahahaha`).
+The fork routes per-turn at `session/prompt.ts` `getModel(...)`: when the session model's
+`capabilities.input.image === false` and a `file`/`data:image` part is present, it substitutes
+`provider.getVisualModel()` for that turn only (session default model untouched). Assert the
+assistant `msg.modelID` is the visual model, and a text-only follow-up stays on the original model.
+Runtime image parts arrive server-side as `{type:"file", mime, url:"data:image/..."}` (matches
+`packages/app/src/components/prompt-input/build-request-parts.ts`).
+
 
