@@ -268,3 +268,42 @@
 | 2026-09-16 23:18 | s045 | deploy | bash scripts/deploy-web-4447.sh --detach | 0 | 0.0.0-mark-dev-202609161521; PID 3468506 on :4447 |
 | 2026-09-16 23:20 | s045 | verify | login + curl live bundle + /__debug probe | 0 | index-BPKpEQSx.js has question.list({directory:e}) + fetched gate; probe 204 |
 | 2026-09-16 23:40 | s046 | verify | user phone retest after s046 fix | 0 | "it works now" — FU-050 RESOLVED; dialog survives background→foreground |
+| 2026-09-17 01:10 | s047 | explore | grep IconButtonV2 + read titlebar-tab-nav/strip + home sessions archive plumbing | 0 | located close-tab wiring; titlebar tabs have no visible close icon-button-v2 (close is in context menu) |
+| 2026-09-17 01:15 | s047 | edit | titlebar-tab-nav.tsx: add onArchive prop + archiveTab (window.confirm) + TooltipV2+IconButtonV2 archive button | 0 | hover-reveal on trailing edge of session tab |
+| 2026-09-17 01:20 | s047 | edit | titlebar-tab-strip.tsx: thread onArchive; implement archive in SessionTabEntry via archiveHomeSession | 0 | reuses archiveHomeSession + notifySessionTabsRemoved |
+| 2026-09-17 01:25 | s047 | edit | i18n en.ts + 60 locale files: add common.archiveConfirm | 0 | parity test repass |
+| 2026-09-17 01:30 | s047 | verify | bun run typecheck | 0 | tsgo clean |
+| 2026-09-17 01:32 | s047 | verify | bun test parity + home-session-archive | 0 | 7 pass |
+| 2026-09-17 01:33 | s047 | verify | bun test titlebar-session-events | 0 | 2 pass |
+| 2026-09-17 01:40 | s048 | code | message-timeline.tsx TimelineThinkingRow: add baseTime prop + 1s setInterval ticker; render elapsed via ui.message.duration.seconds | 0 | elapsed = max(0, floor((now-baseTime)/1000))s, hidden at 0; baseTime = last assistant msg time.created ?? user msg time.created |
+| 2026-09-17 01:42 | s048 | code | message-timeline.tsx case "Thinking": compute baseTime from assistantMessagesByParent().get(userMessageID).at(-1) ?? messageByID | 0 | fallback covers pre-first-response window (user prompt time) |
+| 2026-09-17 01:43 | s048 | code | session-turn.css: add [data-slot="session-turn-thinking-elapsed"] (flex:none, text-weaker, tabular-nums, nowrap) | 0 | flex row sits cleanly |
+| 2026-09-17 01:47 | s048 | verify | bun run typecheck | 0 | tsgo -b clean |
+| 2026-09-17 01:48 | s048 | verify | bun test --conditions=solid ./src/pages/session/timeline | 0 | 31 pass / 0 fail |
+| 2026-09-17 01:49 | s048 | verify | bun test --conditions=solid ./src (full app unit) | 0 | 746 pass / 0 fail |
+| 2026-09-17 01:50 | s048 | verify | bunx oxlint message-timeline.tsx | 2 | pre-existing config error: options.typeAware only in root config (.oxlintrc.json) — not caused by change; not blocking |
+| 2026-09-17 02:10 | s049 | core | edit schema SkillV2.Info += enabled; core skill.ts: update/setEnabled/remove + .disabled marker; tool-skill.test mock updated | 0 | server: skill equal() still clean; core tsgo clean
+| 2026-09-17 02:22 | s049 | protocol/server | groups/skill.ts += skill.update/setEnabled/remove endpoints; handlers/skill.ts implement with Effect.mapError | 0 | tsgo clean (server + protocol)
+| 2026-09-17 02:25 | s049 | client+sdk | bun run generate (client) then bun run build (sdk/js from OpenAPI) | 0 | new skill ops exposed; sdk typecheck clean
+| 2026-09-17 02:40 | s049 | app | home.tsx 3-tab Switch + home-skills-controller.tsx + home-skills.tsx (edit/copy/toggle/delete + inline editor); i18n en.ts home.skills.* | 0 | app tsgo -b clean; vite build OK
+| 2026-09-17 02:45 | s049 | core test | bun test test/skill.test.ts (update/enable/remove it.live added) + skill-discovery + tool-skill + shared-schema | 0 | 16 pass / 0 fail
+| 2026-09-17 02:48 | s049 | verify | app build (vite) + typecheck for core/protocol/server/client/sdk | 0 | all clean; opencode pkg fails ONLY on pre-existing installation/index.ts WIP
+| 2026-09-17 02:52 | s049 | i18n | added home.skills.* keys to en.ts + 61 locale files (English fallback) | 0 | parity test 5 pass / 979 expects
+| 2026-09-17 02:55 | s049 | verify | bun test home + i18n dirs (app) | 0 | 15 pass / 1437 expects
+| 2026-09-17 03:20 | s049 | docs | session record + command-log + current-state + open-followups (FU-056) + decisions-log (DEC-032) | 0 | self-maintenance complete
+| 2026-09-17 02:10 | s048 | commit | git add message-timeline.tsx session-turn.css; git commit "feat(app): live elapsed-seconds counter on the timeline Thinking indicator" | 0 | 1724398, 2 files (+32/-1) |
+| 2026-09-17 02:14 | s048 | push | git push origin dev | 2 | pre-push hook typecheck failed: installation/index.ts TS2349/TS2322 (unrelated uncommitted self-update feature) |
+| 2026-09-17 02:16 | s048 | fix | installation/index.ts: bytes = yield* archive.arrayBuffer (Effect property, not method call) | 0 | TS2349 fixed |
+| 2026-09-17 02:17 | s048 | verify | bun run typecheck (monorepo, as hook) | 0 | 30/30 success |
+| 2026-09-17 02:18 | s048 | commit | git commit installation/index.ts "fix(opencode): installation curl upgrade downloads archive body as Effect property" | 0 | 823d96d, 1 file (+46/-10) |
+| 2026-09-17 02:19 | s048 | push | git push origin dev | 0 | 7bc07aa..823d96d dev->dev (home-skills-controller noted: someone else committed fefa8eb meanwhile) |
+| 2026-09-17 06:52 | s049 | diagnose | grep SkillV2Source across repo | 0 | SDK-generated union (types.gen.ts:3036) is Directory|Url|Embedded; gates plugin SkillDraft.source via packages/plugin/v2/effect/skill.ts — SDK regen is real dependency for record merge |
+| 2026-09-17 06:55 | s049 | tool | question — re-scope skills tab? | 0 | user: KEEP ORIGINAL SIMPLE (view+edit only) |
+| 2026-09-17 06:56 | s049 | revert | git checkout -- packages/core/src/skill.ts packages/schema/src/skill.ts packages/opencode/src/server/routes/instance/httpapi/server.ts | 0 | merge machinery fully reverted; working tree clean |
+| 2026-09-17 06:57 | s049 | verify | bun turbo typecheck --filter @opencode-ai/core --force | 0 | clean (no SDK regen needed post-revert) |
+| 2026-09-17 06:58 | s049 | verify | bun test core skill.test.ts tool-skill.test.ts | 0 | 4 pass / 27 expects |
+| 2026-09-17 06:58 | s049 | verify | bun test app i18n parity + home dir | 0 | 5 pass/979 expects + 6 pass/14 expects |
+| 2026-09-17 06:59 | s049 | verify | curl /api/skill GET (authed) on :4447 | 0 | 200, returns customize-opencode — feature live, no redeploy needed |
+| 2026-09-17 07:00 | s049 | docs | session record + current-state + open-followups (FU-056→closed) + decisions-log (DEC-033) + command-log | 0 | self-maintenance complete |
+| 2026-09-17 10:42 | s050 | fix | scripts/deploy-web-4447.sh: resolve SELF abs path BEFORE cd (was resolving $0 after cd -> wrong path for ./ invocation) | 0 | works from any invocation style; verified 4 styles + syntax OK |
+| 2026-09-17 15:27 | s050 | docs | session record marked ABANDONED (v1/legacy UI is upstream official design, not ours; no work done) | 0 | s050 closed, nothing committed/deployed; tree unchanged at 823d96d |

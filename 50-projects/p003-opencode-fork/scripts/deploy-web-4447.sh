@@ -7,10 +7,23 @@
 # Safe to re-run: it tears down the old instance first. Write-to-self of already-serving
 # PIDs is handled via a pidfile under testing/.
 set -euo pipefail
+
+# Resolve our own absolute path FIRST, while cwd is still whatever the caller
+# used. Doing readlink after `cd` resolves relative $0 against the new cwd and
+# silently produces a wrong path (e.g. ./deploy-web-4447.sh -> fork-root/...).
+# This works whether the script is invoked as ./deploy-web-4447.sh (from either
+# this scripts/ dir or the fork root) or by an absolute/relative path.
+this="$0"
+case "$this" in
+  /*) SCRIPT_DIR="$(dirname "$this")" ;;
+  *)  SCRIPT_DIR="$(cd "$(dirname "$this")" >/dev/null 2>&1 && pwd)" ;;
+esac
+SELF="$SCRIPT_DIR/$(basename "$this")"
+SELF="$(readlink -f "$SELF" 2>/dev/null || echo "$SELF")"
+
 PORT="${PORT:-4447}"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$ROOT"
-SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 BIN_REL="$(ls opencode/packages/opencode/dist/opencode-linux-*/bin/opencode 2>/dev/null | head -1 || true)"
 PIDFILE="$ROOT/testing/.web-$PORT.pid"
 DEPLOY_LOG="$ROOT/testing/deploy-$PORT.log"

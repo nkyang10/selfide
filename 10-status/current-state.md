@@ -3,6 +3,56 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
+- **Last updated:** 2026-09-17 (UTC) — **s050 follow-up: fork web UI (re)deployed + restart script fixed.**
+  Rebuilt + restarted :4447 with the current `dev` branch (`deploy-web-4447.sh --detach`), now serving
+  pid 4038881. Fixed `deploy-web-4447.sh` path resolution (resolves `SELF` before `cd` — it used to break
+  when invoked as `./deploy-web-4447.sh` from inside `scripts/`) → script is now cwd-independent
+  (DEC-034). Deploy/restart procedure documented in `30-runbooks/rb-003-echo-web-deploy-restart.md`.
+  Verified none of the deploy material lives in an enhancement folder (`enhanced-resolve` is the only
+  `*enhance*` path, an unrelated node_modules dep).
+
+- **Last updated:** 2026-09-17 (UTC) — **s049 SHIPPED: Skills management tab in Home (committed, pushed,
+  deployed).** Home page (`home.tsx`) has a third **Skills** tab listing all skills from `GET /api/skill`
+  sorted alphanumerically; each row shows **name + SKILL.md file location** with action icons: **edit**
+  (inline text editor in the tab), **copy to clipboard**, **enable/disable toggle**, **delete** (inline
+  confirm). Server side: endpoints `POST /api/skill/:name` (update content), `POST
+  /api/skill/:name/enabled` (toggle), `DELETE /api/skill/:name` (delete) in protocol `SkillGroup` +
+  `packages/server` `SkillHandler`, backed by new `SkillV2.update/setEnabled/remove` in
+  `packages/core/src/skill.ts` (commit `fefa8eb` + `f21cdd9`). Disable = rename `SKILL.md` →
+  `.SKILL.md.disabled` (agent discovery skips it; list still shows it with `enabled=false` for
+  re-enable). Schema `SkillV2.Info` gained `enabled?: boolean`. Verified: core typecheck forced-clean,
+  skill tests 4/4, i18n parity 979 expects, home tests 6/6. **Deployed live** on :4447 build
+  `0.0.0-mark-dev-202609170400` (includes `823d96d`), `/api/skill` GET returns `customize-opencode`.
+  **Earlier merge request REVERTED** (see `DEC-033`): a "merge other agent systems' skills as read-only
+  into `/api/skill`" trial added `record` source + `editable` + `mergeReadonly` + a
+  `skillDiscoveryMergeLayer`, but user re-scoped to **original view+edit only**; reverted to clean tree,
+  no SDK regen needed. Details: `20-logs/sessions/2026-09-17_s049_skills-management-tab.md`.
+
+- **Last updated:** 2026-09-17 (UTC) — **s048: thinking elapsed timer committed + pushed to fork `dev`
+  (`1724398`).** Also committed/fixed the unrelated broken `installation/index.ts` curl-upgrade change
+  (`823d96d`, body read as Effect property) which was blocking the pre-push typecheck hook. Push:
+  `7bc07aa..823d96d`. **Not built/deployed yet** → FU-055 (build + verify `Thinking … Xs` live counter on :4447).
+  Details: `20-logs/sessions/2026-09-17_s048_thinking-elapsed-timer.md`.
+
+- **Last updated:** 2026-09-17 (UTC) — **s048 NEW FEATURE (source, committed): live elapsed-seconds
+  timer on the "Thinking" indicator.** `TimelineThinkingRow` now shows `Thinking … 7s` while the agent is
+  busy before parts stream. Base time = most recent `AssistantMessage.time.created` (last LLM call), falling
+  back to the user prompt `time.created`; reset on each new LLM response. Ticks every 1s (`setInterval`),
+  renders via existing i18n `ui.message.duration.seconds`; new `[data-slot="session-turn-thinking-elapsed"]`
+  CSS (tabular-nums, flex:none). Verified: typecheck clean, timeline 31/31 + full unit 746/746. **Not
+  committed / not built / not deployed** → FU-055. Details:
+  `20-logs/sessions/2026-09-17_s048_thinking-elapsed-timer.md`.
+
+- **Last updated:** 2026-09-17 (UTC) — **s047 NEW FEATURE (source, uncommitted): Archive icon on open
+  titlebar session tabs.** Each open session tab in the titlebar now shows an archive `icon-button-v2`
+  (`data-action="titlebar-tab-archive"`) on its trailing edge (hover-reveal). Click → `window.confirm`
+  (new `common.archiveConfirm`, added to all 60 locale dicts) → on accept: `archiveHomeSession` marks the
+  session archived server-side (`session.update({time:{archived}})` → Home session list filters it out via
+  `!s.time?.archived`) and `notifySessionTabsRemoved` closes the open tab(s). Reuses the same plumbing as the
+  home session-list archive. Verified: typecheck clean, i18n parity + archive + session-events tests pass. **Not
+  committed / not built / not deployed yet** → FU-054. Details:
+  `20-logs/sessions/2026-09-17_s047_titlebar-tab-archive.md`.
+
 - **Last updated:** 2026-09-16 (UTC) — **s046 USER-VERIFIED ✅: foreground choice dialog now works.** After the
   s046 fix (`0.0.0-mark-dev-202609161521`, :4447), the user confirmed "it works now" — the decision dialog survives
   background→foreground (FU-050 closed). Details:

@@ -638,3 +638,54 @@ Format:
   stream, and a restarted stream does not replay missed `question.asked` anyway); server-side buffering/push.
 - **Consequences / revisit when:** decision dock self-heals on return to foreground. Deploy + on-device
   retest pending (FU-050).
+
+### DEC-032 — Skills management: marker-file rename for enable/disable; manage via v2.skill API (2026-09-17, s049)
+- **Decision:** web-UI "Skills" tab manages skills through the existing `v2.skill` HTTP surface
+  (`GET /api/skill` + new `POST /api/skill/:name`, `POST /api/skill/:name/enabled`,
+  `DELETE /api/skill/:name`), backed by `SkillV2` (core) service operating on disk. A skill is
+  **disabled** by renaming its `<dir>/SKILL.md` to `<dir>/.SKILL.md.disabled` (and back on enable) —
+  the discovery glob `**/SKILL.md` skips it, so it stops being offered to agents, yet still appears in
+  the management list (now with `enabled:false`) for re-enabling. `SkillV2.Info` gained `enabled?`.
+- **Rationale:** the marker-rename matches the confirmed user preference, needs no new config-runtime
+  state, and is reversible at the filesystem level. Building on `v2.skill` (the surface the web app's
+  SDK already calls) avoids wiring an entire second skill system.
+- **Alternatives rejected:** a local (UI-only) opt-out store (would not affect agent discovery);
+  permission-rule based toggling (semantic mismatch — permissions gate *use*, not *availability*);
+  using the agent's `@/skill` discovery service (different instance-disk lifecycle; much larger blast
+  radius, and not what `/api/skill` exposes).
+- **Consequences / scope caveat:** the tab manages the **SkillV2 directory-source set only**
+  (`.opencode/skills` + configured skills dirs) — NOT `.claude/skills` or per-project SKILL.md
+  discovery, which live in the agent-level `@/skill` system. If the user later wants those too, a
+  second management surface (instance skill group) is required.
+
+### DEC-033 — Re-scope: Skills tab stays view+edit ONLY; revert "merge other agent systems read-only" (2026-09-17, s049)
+- **Decision:** the exploratory "merge all agent-skill discovery into `/api/skill` as read-only extra
+  rows (hide edit/delete icons, `editable:false`) on the Skills tab" was **reverted**. The tab keeps its
+  original scope from DEC-032: list + edit + copy + enable/disable + delete, over the SkillV2
+  directory-source set.
+- **Rationale:** the user clarified the feature intent is **view + edit `SKILL.md` only**. The merge
+  pulled in schema (`RecordSource` + `Info.editable`), core (`mergeReadonly`, read-only guards),
+  server wiring (`skillDiscoveryMergeLayer`, `Layer.provideMerge(Skill.node)`), all uncommitted; it
+  also forced an SDK/OpenAPI regeneration (the plugin-facing `SkillV2Source` union in
+  `packages/sdk/js`/`types.gen.ts` must gain `record` — schema changes ripple to generated SDK types
+  referenced by `packages/plugin/src/v2/effect/skill.ts`). Reverting removed that dependency entirely.
+- **Alternatives rejected:** shipping the merge (scope creep, new SDK dependency, unresolved
+  per-location `SkillV2.Service` scope risk in a static startup merge layer); UI-only hiding of icons
+  without server read-only (would still allow writes to foreign dirs).
+- **Consequences / revisit when:** nothing in the tree reflects the merge; clean working tree, no SDK
+  regen needed. If the user later wants `.claude/skills` / project skills surfaced on the tab,
+  revisit DEC-032's caveat with a read-only instance-level listing (re-apply merge machinery + SDK
+  regen).
+
+### DEC-034 — deploy-web-4447.sh is cwd-independent (2026-09-17, s050)
+- **Decision:** the fork deploy script resolves its own absolute path **before any `cd`**, so it no
+  longer breaks when invoked as `./deploy-web-4447.sh` from inside `scripts/`. The root cause was
+  `readlink -f "$0"` running *after* `cd "$ROOT"`: with a relative `$0`, the link resolved against
+  the new cwd and produced a wrong path (missing `scripts/`). Deploy+restart procedure is now
+  documented in `30-runbooks/rb-003-echo-web-deploy-restart.md`.
+- **Rationale:** script should work regardless of invocation style (relative/absolute/any cwd);
+  a future agent reading RB-003 can also use the exact right command.
+- **Alternatives rejected:** moving the script to a shared `ide/scripts/` (user wants no relocation —
+  just the knowledge that how to deploy/restart is discoverable).
+- **Consequences / revisit when:** the script lives only in `p003-opencode-fork/scripts/`; RB-003 is
+  the single source of truth for how to run it. Revisit if deployment moves to a shared location.
