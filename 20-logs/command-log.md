@@ -307,3 +307,4 @@
 | 2026-09-17 07:00 | s049 | docs | session record + current-state + open-followups (FU-056→closed) + decisions-log (DEC-033) + command-log | 0 | self-maintenance complete |
 | 2026-09-17 10:42 | s050 | fix | scripts/deploy-web-4447.sh: resolve SELF abs path BEFORE cd (was resolving $0 after cd -> wrong path for ./ invocation) | 0 | works from any invocation style; verified 4 styles + syntax OK |
 | 2026-09-17 15:27 | s050 | docs | session record marked ABANDONED (v1/legacy UI is upstream official design, not ours; no work done) | 0 | s050 closed, nothing committed/deployed; tree unchanged at 823d96d |
+| 2026-09-17 10:48 | s050 | push | git -c credential.helper=store push origin main | 0 | 576bb73..7444c1c main->main selfide; ff commit+push done |
