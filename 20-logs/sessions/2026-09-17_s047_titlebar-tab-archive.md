@@ -1,3 +1,8 @@
+> ⚠️ **CORRECTED 2026-09-18 (s051):** This feature was **REJECTED by the user**, and the code described
+> below is **nowhere in the codebase** — never committed, not on disk, not in git history/stash/worktrees.
+> Clean at `823d96d`. The record below overclaimed "code done, uncommitted"; that code does not exist.
+> Nothing was reverted because nothing was present.
+
 # Session s047 — New feature: Archive icon on open titlebar session tabs
 
 **Date:** 2026-09-17 (UTC)

@@ -308,3 +308,26 @@
 | 2026-09-17 10:42 | s050 | fix | scripts/deploy-web-4447.sh: resolve SELF abs path BEFORE cd (was resolving $0 after cd -> wrong path for ./ invocation) | 0 | works from any invocation style; verified 4 styles + syntax OK |
 | 2026-09-17 15:27 | s050 | docs | session record marked ABANDONED (v1/legacy UI is upstream official design, not ours; no work done) | 0 | s050 closed, nothing committed/deployed; tree unchanged at 823d96d |
 | 2026-09-17 10:48 | s050 | push | git -c credential.helper=store push origin main | 0 | 576bb73..7444c1c main->main selfide; ff commit+push done |
+| 2026-09-18 07:50 | s051 | verify | git status / diff HEAD in p003 fork | 0 | clean at 823d96d; no uncommitted code — FU-054 absent |
+| 2026-09-18 07:51 | s051 | verify | grep archiveConfirm + titlebar-tab-archive in packages/app/src | 0 | no hits anywhere in src |
+| 2026-09-18 07:52 | s051 | verify | git stash list + git worktree list + git log --all | 0 | no stash, single worktree, no archive-related commit |
+| 2026-09-18 07:53 | s051 | docs | FU-054 closed REJECTED; current-state corrected; record s051 written | 0 | no code to revert; feature never existed on disk/git |
+| 2026-09-18 07:55 | s051 | verify | git status/branch -vv/log origin/dev in p003 fork | 0 | tree clean at 778cab7, local==origin/dev, FU-055 commits already pushed |
+| 2026-09-18 07:56 | s051 | close | FU-055 marked CLOSED (deployed+tested OK per user); no commit/push needed | 0 | follow-ups + command-log updated |
+| 2026-09-18 08:05 | s051 | verify | grep testNotification in general.tsx + git log -S | 0 | FU-051 code in commit 3ba1b4e, already on origin/dev (no diff) |
+| 2026-09-18 08:06 | s051 | verify | ss/ps + deploy log + web log for :4447 | 0 | live build 0.0.0-mark-dev-202609180023 pid 230755 from current dev head 778cab7 → contains FU-051 |
+| 2026-09-18 08:07 | s051 | docs | FU-051 updated: committed+pushed+deployed; only desktop visual retest remains | 0 | follow-ups updated
+| 2026-09-18 08:10 | s051 | change | general.tsx: Debug section gate desktop() =on -> always show | 0 | Debug/Test-notification now visible in web UI; i18n keys already per-locale, not duplicated |
+| 2026-09-18 08:11 | s051 | verify | bun typecheck (packages/app, tsgo -b) | 0 | typecheck clean
+| 2026-09-18 08:12 | s051 | push | git commit 1fa1c0c + push origin dev | 0 | feat(app): Debug section in web UI; pushed 1fa1c0c
+| 2026-09-18 08:15 | s051 | deploy | scripts/deploy-web-4447.sh --detach | 0 | deploy complete, new pid 262209 on :4447 (was 230755)
+| 2026-09-18 08:20 | s051 | verify | user tested Debug/Test-notification in web UI | 0 | OK per user; FU-051 CLOSED
+| 2026-09-18 08:21 | s051 | docs | FU-051 closed; session record + current-state update | 0 | self-maintenance done
+| 2026-09-18 01:49 | s052 | verify | file search for sessions folder-icon row | 0 | correct component found: home-sessions-table.tsx (not view.tsx) |
+| 2026-09-18 01:49 | s052 | edit | home-sessions-table.tsx config+server cap | 0 | server max-w 40% + min-w-0 shrink truncate; folder flex-1 + title tooltips |
+| 2026-09-18 01:49 | s052 | verify | bun typecheck + oxlint | 0 | clean |
+| 2026-09-18 01:50 | s052 | push | git commit bc16a37; push origin dev | 0 | Sessions table row folder-priority fix pushed |
+| 2026-09-18 01:50 | s052 | deploy | scripts/deploy-web-4447.sh --detach | 0 | deployed; new pid 234175 :4447 |
+| 2026-09-18 01:50 | s052 | verify | user confirmed fix | 0 | "now it working" — folder shows more chars |
+| 2026-09-18 01:51 | s052 | revert | git revert 1fc1a98 (d415db5) + restore view.tsx to 823d96d (e83d75c) | 0 | wrong-component edits reverted; pushed |
+| 2026-09-18 01:51 | s052 | docs | session record s052 + current-state + followups | 0 | case closed |
