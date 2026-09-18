@@ -331,3 +331,14 @@
 | 2026-09-18 01:50 | s052 | verify | user confirmed fix | 0 | "now it working" — folder shows more chars |
 | 2026-09-18 01:51 | s052 | revert | git revert 1fc1a98 (d415db5) + restore view.tsx to 823d96d (e83d75c) | 0 | wrong-component edits reverted; pushed |
 | 2026-09-18 01:51 | s052 | docs | session record s052 + current-state + followups | 0 | case closed |
+| 2026-09-18 08:25 | s051 | close | FU-047 closed per user on-device retest ("now is working great") | 0 | follow-ups updated
+| 2026-09-18 08:30 | s051 | close | FU-020/022/023/025 CLOSED — iOS push verified OK via Debug → Send test on iPhone | 0 | open-followups updated
+| 2026-09-18 08:35 | s051 | close | FU-001/002/003/004 CLOSED — no longer applicable (settled by fork + :4447 deployment in practice) | 0 | open-followups updated
+| 2026-09-18 08:45 | s051 | investigate | FU-052 scope: map all .projects.open/close/expand/move/touch/last usages + server /project model | 0 | store NOT dead — powers Home panel, palette, layout; only Home sessions are server-truth (s043) |
+| 2026-09-18 08:46 | s051 | decision | FU-052 scoped down per user: keep store, safe fix already shipped in s043; no code change | 0 | DEC-035 recorded |
+| 2026-09-18 08:47 | s051 | close | FU-047, FU-020/22/23/25, FU-001/2/3/4, FU-052 all closed | 0 | open-followups updated
+| 2026-09-18 08:50 | s052 | close | FU-053/035/041/038/019/007/016 CLOSED per user (tested ok / close) | 0 | follow-ups updated
+| 2026-09-18 08:55 | s052 | close | FU-028/032/042/021(s004)/013 CLOSED, FU-015 DROPPED per user (2026-09-18) | 0 | open-followups updated
+| 2026-09-18 09:00 | s052 | close | FU-033/034/037 CLOSED per user | 0 | open-followups updated
+| 2026-09-18 09:05 | s052 | close | FU-010/011 CLOSED — no longer applicable per user | 0 | open-followups updated
+| 2026-09-18 09:10 | s052 | close | FU-006/008/017/021(s005)/046/048 CLOSED — close-all per user | 0 | open-followups now fully cleared

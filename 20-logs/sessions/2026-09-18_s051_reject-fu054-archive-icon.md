@@ -1,8 +1,8 @@
 # Session s051 — Reject FU-054; close FU-055 + FU-051 (Debug section → web UI)
 
-**Date:** 2026-09-18 (UTC)
-**Session:** s051
-**Trigger:** User: "fu-054 is rejected. all change need revert."
+**Date:** 2026-09-18 (UTC)  ·  **Ran through s052 (close-out).**
+**Session:** s051 → s052
+**Trigger:** User: "fu-054 is rejected. all change need revert." followed by a full follow-up close-out.
 
 ## Parts
 
@@ -37,6 +37,30 @@ to revert** — the feature is absent from the codebase:
   skips only while the tab is focused/in-view.
 - `commit/push` `1fa1c0c`; `bun build` via `deploy-web-4447.sh --detach`; new pid **262209** on :4447.
 - Typecheck clean. User tested OK → FU-051 closed.
+
+### iOS follow-ups closed (user: "ios push tested okay now with the debug button in ios phone")
+- FU-020, FU-022, FU-023, FU-025 → ✅ CLOSED.
+
+### FU-001/002/003/004 closed
+- No longer applicable; stack/deploy/auth/MVP settled by the fork + :4447 reality.
+
+### FU-047 closed
+- User on-device retest: "now is working great."
+
+### FU-052 (scoped down per user choice "shrink to a safe fix")
+- Investigation disproved the "dead store" premise: `createServerProjects` (Persist.server projects,
+  open/close/expand/collapse/move/last/recentlyClosed) still drives the Home project panel, command
+  palette, and layout. Only Home *sessions* were already moved to server truth in s043
+  (`home-controller.ts:28-31` `projects` memo = `focusedSync().data.project`; `select()` accepts any
+  server-known project :88-92). Safe fix already shipped + deployed (in current pid 262209 build).
+- No code change. FU-052 closed; decision recorded as DEC-035 (keep store).
+
+### s052 close-out (full backlog cleared)
+User closed the rest of the open follow-ups 2026-09-18: FU-028/032/042/053/038/041/FU-021(s004)/FU-035
+verified OK; FU-001/002/003/004/008/010/011 no longer applicable; FU-013 closed + FU-015 dropped
+("ignore related"); FU-019 rotate dropped (token already rotated/deleted); FU-007/016 engine cycles
+tested OK; FU-006/017/021(s005)/030/046/048 closed (close-all). Result: **`open-followups.md` has zero
+open rows** — all 56 resolved.
 
 ## Evidence
 

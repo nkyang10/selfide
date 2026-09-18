@@ -19,6 +19,16 @@
   removed), typecheck clean, committed `1fa1c0c`, pushed to `origin/dev`, rebuilt + redeployed :4447 —
   now serving **pid 262209**. Tested OK per user → FU-051 closed.
 
+- **Last updated:** 2026-09-18 (UTC) — **s051: FU-052 scoped down → closed (safe fix already shipped).**
+  Investigation disproved the FU-052 premise: the `Persist.server("projects")` `createServerProjects`
+  store (open/close/expand/collapse/move/last/recentlyClosed) is **NOT dead** — it still drives the Home
+  project *panel* list, command palette, and layout. Only the Home **session** list runs on server truth
+  (s043: `home-controller.ts:28-31` `projects` memo = `focusedSync().data.project`, `select()` accepts any
+  server-known project :88-92) — the actual fresh-device empty-sessions bug, already fixed + deployed.
+  Per user decision, FU-052 shrunk to the safe fix (already in place); store kept. DEC-035 recorded.
+  Also closed this session: FU-047, FU-020, FU-022, FU-023, FU-025 (iOS push verified via Debug→Send
+  test), FU-001/002/003/004 (no longer applicable).
+
 - **Last updated:** 2026-09-17 (UTC) — **s050 follow-up: fork web UI (re)deployed + restart script fixed.**
   Rebuilt + restarted :4447 with the current `dev` branch (`deploy-web-4447.sh --detach`), now serving
   pid 4038881. Fixed `deploy-web-4447.sh` path resolution (resolves `SELF` before `cd` — it used to break

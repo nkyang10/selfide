@@ -689,3 +689,20 @@ Format:
   just the knowledge that how to deploy/restart is discoverable).
 - **Consequences / revisit when:** the script lives only in `p003-opencode-fork/scripts/`; RB-003 is
   the single source of truth for how to run it. Revisit if deployment moves to a shared location.
+
+## DEC-035 — FU-052 scoped down: keep the per-device projects store, server truth only for Home sessions
+
+- **When:** 2026-09-18 (s051)
+- **Context:** FU-052 originally planned to rip out the whole `Persist.server("projects")`
+  `createServerProjects` store (open/close/expand/collapse/move/last/recentlyClosed), treating it as
+  dead after s043 switched Home to server truth. Investigation disproved that premise.
+- **Decision:** Keep `createServerProjects` — it still legitimately powers the Home project *panel*
+  list, command palette, and layout state (open set, drag order, expand state, last, recently-closed),
+  all of which are per-device UI concerns. Only the Home *session* list — the actual cross-device bug
+  (fresh device saw zero sessions) — is server truth via `home-controller.ts` `projects` memo
+  (`focusedSync().data.project`, block :28-31; `select()` accepts any server-known project :88-92).
+  FU-052 closed as already-fixed-by-s043; no further code change.
+- **Alternatives rejected:** (a) full store rip-out — would break project panel/palette/layout;
+  (b) server-side hide/order model — larger app+server change, no user need.
+- **Consequences / revisit when:** if hide/order/hide-persistence per project ever becomes a real
+  requirement, a server-side model (e.g. per-worktree persisted flags) should be designed then.
