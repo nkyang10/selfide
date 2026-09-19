@@ -3,6 +3,52 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
+- **Last updated:** 2026-09-19 (UTC) — **s055: lean fork README (strip upstream dup, point to upstream,
+  highlight differences).** Rewrote `README.md` into a short MarkCode fork README: branding + "This is a
+  fork" callout (→ upstream opencode.ai / anomalyco/opencode for install/CLI/desktop/integrations/plugins/
+  docs) + a **"What's different from upstream"** section (FE-001..015 deltas: mobile-first Sessions cards,
+  last-prompt subtitle, folder explorer on mobile, drag-down menu, draft-tab context menu, Zag.js TreeView
+  picker, login page + cookie auth, foreground re-sync, project-selector crash fix, DEV dropdown, refresh
+  toast) + self-built Linux aarch64 binary build. Replaced all **21 `README.<lang>.md`** with a 5-line
+  pointer to the English README + upstream. Added **Fork notices** to `CONTRIBUTING.md` + `SECURITY.md`.
+  Left `AGENTS.md` (already fork-aware), `CONTEXT.md` (accurate), `STATS.md`/`script/stats.ts` (generated
+  upstream stats — flagged, FU-060), `LICENSE` (MIT, attribution). 24 files, +207/−2,794. **Committed
+  `cbfc738` + pushed `origin/dev`** (`f094279..cbfc738`; only the 24 doc files staged — s054's untracked
+  `release.ts` left out).
+
+- **Last updated:** 2026-09-19 (UTC) — **s054: fork reconciled with upstream + versioning strategy
+  decided.** (1) **Fork sync:** merged all 59 upstream commits (`upstream/dev`) + 3 Windows-build commits
+  (`origin/dev`) into fork `dev` — **0 conflicts** (54df2c4 + 9ebb0b3), pushed `origin/dev` (7a43632..
+  9ebb0b3). Gates: typecheck 30/30, web app build OK, core tests 3578 pass / 8 fail (all pre-existing
+  env/locale/upstream issues, not merge-related). (2) **Versioning strategy (DEC-037):** adopt intel SemVer
+  `MAJOR.MINOR.PATCH-fork.<N>[-channel]` — upstream base in MAJOR.MINOR.PATCH, monotonic `fork.<N>` release
+  counter, timestamp as build metadata only; 3 channels `dev`(float)/`beta`/`stable`; sync = merge
+  `upstream/dev` into `dev` only (never rebase counter); gates = typecheck + app build + core tests.
+  Docs:   `40-knowledge/versioning-strategy.md` + `30-runbooks/rb-004-release.md`. Next: implement
+  `script/release.ts` (FU-055). Fork HEAD = 9ebb0b3 (dev), origin in sync.
+
+- **Last updated:** 2026-09-19 (UTC) — **s054 follow-on: release tooling implemented (FU-058 partial).** Added
+  `opencode/packages/script/release.ts` (DEC-037 tool): computes `MAJOR.MINOR.PATCH-fork.<N>[-dev|-beta.<M>]` from
+  the `packages/opencode` version, emits `OPENCODE_VERSION` env for the build; modes `--channel
+  {dev,beta,stable}` + `--bump`/`--sync-upstream`/`--dry`/`--json`; typecheck clean. **Critical finding:** the
+  fork's `build.ts` previously stamped `0.0.0-mark-dev-*` via `OPENCODE_CHANNEL=mark-dev`, but the channel var is
+  ALSO the SQLite DB suffix (`opencode-<channel>.db`) — changing it to beta/latest would point at a different/empty
+  DB. Fix: `release.ts` + `build-linux.sh` always keep `OPENCODE_CHANNEL=mark-dev`; fork channel semantics now live
+  only in the version string. `build-linux.sh [dev|beta|stable]` now derives `OPENCODE_VERSION` via `release.ts`.
+  Remaining (FU-058): first `beta.1` cut + `/api/health` verify + tag. Files changed in fork repo: new
+  `packages/script/release.ts` (uncommitted on `dev`; HEAD `cbfc738`). DB `opencode-mark-dev.db` untouched.
+
+- **Last updated:** 2026-09-19 (UTC) — **s053: rebrand fork READMEs OpenCode → MarkCode (all 22 language
+  variants).** User asked to make the project name in the docs committed to GitHub be **MarkCode** (official
+  name). Scope confirmed: *branding only* (product-name mentions) + *all* README files. Key finding: in every
+  `README*.md`, `OpenCode` (capital O) is **only** the product name, while lowercase `opencode` is **only**
+  functional (URLs `opencode.ai`, npm `opencode-ai`, `anomalyco/opencode`, CLI cmds, example names) → a
+  case-sensitive `sed 's/OpenCode/MarkCode/g'` is safe. Applied to `50-projects/p003-opencode-fork/opencode/`
+  `README.md` + 21 `README.<lang>.md` (177 ins/177 del). Verified: 0 `OpenCode` left, all functional refs
+  intact. **Committed `f094279` + pushed `origin/dev`** (user asked; `nkyang10/opencode`). Push needed
+  `PATH+=~/.bun/bin` for the husky pre-push `bun turbo typecheck` hook (30/30 pass). Other committed
+  docs (CONTRIBUTING/AGENTS/CONTEXT) still say OpenCode — out of scope (user chose READMEs only).
+
 - **Last updated:** 2026-09-18 (UTC) — **s052 CLOSED: sessions-table folder priority.** User wanted the
   folder name to show more chars than the server address in past-session rows. Actual UI = **Sessions tab
   table** (`home-sessions-table.tsx`, not the sidebar view). Fixed row: server name capped `max-w-[40%]`

@@ -6,6 +6,7 @@
 | [rb-001-local-dev-loop.md](rb-001-local-dev-loop.md) | Local dev loop: run the web UI against `opencode serve` | low |
 | [rb-002-night-cycle.md](rb-002-night-cycle.md) | p002 engine: hand-off → clarify → run → morning report on any GitHub project | low-medium |
 | [rb-003-echo-web-deploy-restart.md](rb-003-echo-web-deploy-restart.md) | Deploy/restart the opencode-fork web UI on :4447 (rebuild + restart) | destructive |
+| [rb-004-release.md](rb-004-release.md) | Cut a beta/stable build of the fork (gates + tag + push + notes) | medium |
 
 ## Planned (create when relevant)
 

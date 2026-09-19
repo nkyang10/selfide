@@ -706,3 +706,73 @@ Format:
   (b) server-side hide/order model — larger app+server change, no user need.
 - **Consequences / revisit when:** if hide/order/hide-persistence per project ever becomes a real
   requirement, a server-side model (e.g. per-worktree persisted flags) should be designed then.
+
+## DEC-036 — Rebrand fork READMEs OpenCode → MarkCode: branding-only, casing-safe
+
+- **When:** 2026-09-19 (s053)
+- **Context:** user asked to make the project name in the docs committed to GitHub be **MarkCode**
+  (official name), i.e. "opencode → MarkCode". Target = the p003 fork's `README*.md` (the repo
+  `nkyang10/opencode` on GitHub). Scope confirmed with user: *branding only* + *all* language READMEs
+  (22 files).
+- **Decision:** Applied a **case-sensitive** `sed 's/OpenCode/MarkCode/g'` to all 22 `README*.md` in
+  `50-projects/p003-opencode-fork/opencode/`. Rationale (the key finding): in these READMEs the casing
+  cleanly separates the two concerns — `OpenCode` (capital O) occurs **only** as the product name (logo
+  alt, tagline prose, section headings, "the OpenCode team"), while lowercase `opencode` occurs **only**
+  as functional references (`opencode.ai` URLs, npm `opencode-ai`, `github.com/anomalyco/opencode`, CLI
+  commands, example names `opencode-dashboard`/`opencode-mobile`). So the case-sensitive replace touches
+  branding and cannot break any install/link/package reference. Result: 177 ins/177 del, 0 `OpenCode` left,
+  all functional refs intact.
+- **Alternatives rejected:** (a) blanket lowercase `opencode`→`markcode` — would rewrite URLs, the npm
+  package name, and install commands → break the docs; (b) hand-edit each of 22 files — slower and
+  error-prone for a mechanical replace.
+- **Consequences / revisit when:** Committed `f094279` + pushed `origin/dev` (`nkyang10/opencode`), FU-057
+  resolved. Gotcha: husky **pre-push** hook runs `bun turbo typecheck` but `bun` isn't on the git-hook PATH —
+  push with `PATH="$HOME/.bun/bin:$PATH"`. Other committed docs (`CONTRIBUTING.md`, `AGENTS.md`, `CONTEXT.md`)
+   still say OpenCode (out of scope — user chose READMEs only). If the brand extends beyond READMEs later,
+   re-run the same casing rule per file.
+
+## DEC-037 — Fork versioning: `MAJOR.MINOR.PATCH-fork.<N>` SemVer + channels
+
+- **When:** 2026-09-19 (s054)
+- **Context:** the fork ships date-only builds (`0.0.0-mark-dev-<timestamp>`) while `package.json` carries
+  upstream's `1.18.31`. No channel/divergence/rollback signal, no stable artifact identity, no bump policy when
+  upstream advances.
+- **Decision:** Adopt intel SemVer `MAJOR.MINOR.PATCH-fork.<N>[-channel]`: `MAJOR.MINOR.PATCH` always mirrors the
+  upstream baseline; `fork.<N>` is a monotonic fork release counter (never reset/reused); timestamp becomes build
+  metadata only (`+<utc>`). Three channels: `dev` (float, no tag), `beta` (`-beta.<N>`), `stable` (bare). Release
+  gates = typecheck (30/30) + app build + core tests; sync policy = merge `upstream/dev` into `dev` only, never
+  rebase the counter. Source of truth = `package.json`; `OPENCODE_VERSION` in `build.ts` reads it (replace the
+  hardcoded `0.0.0-mark-dev-*`).
+- **Alternatives rejected:** date-only (status quo), fork-own MAJOR, git-sha-only, CalVer, changesets/lerna tooling.
+- **Consequences / revisit when:** implement `script/release.ts` (FU-058) and drain hardcoded version outputs to the
+  single source; revisit if upstream adopts changesets or fork needs independent registry publishing. See
+  `40-knowledge/versioning-strategy.md` + `30-runbooks/rb-004-release.md`.
+- **Implementation note (s054):** `packages/script/release.ts` + `build-linux.sh` wiring done. **Critical finding:**
+  `OPENCODE_CHANNEL` doubles as the SQLite DB filename suffix (`opencode-<channel>.db`). To keep fork data isolated it
+  MUST stay `mark-dev`; release-channel semantics moved into the version string only (`-dev`/`-beta.<M>`/bare stable).
+  Shipping `OPENCODE_CHANNEL=beta`/`latest` would silently point at a different/empty DB.
+
+## DEC-038 — Lean fork README: strip upstream dup, point to upstream, highlight differences
+
+- **When:** 2026-09-19 (s055)
+- **Context:** after the MarkCode rebrand (DEC-036), user asked to remove duplicate content in the fork's
+  README/docs that is just upstream info, reference users to upstream, and highlight what's different.
+  The fork's `README.md` was 100% upstream content (only rebranded); 21 `README.<lang>.md` were full
+  upstream translations.
+- **Decision:** (1) **Rewrote `README.md`** as a short fork README — MarkCode branding, a "This is a fork"
+  callout → upstream (opencode.ai / anomalyco/opencode) for install/CLI/desktop/integrations/plugins/docs,
+  a **"What's different from upstream"** section (FE-001..015 deltas + self-built aarch64 binary), and a
+  License note. Dropped upstream install/quickstart/CLI/desktop/integrations/services/plugins/funding/build/
+  contributors sections, the Discord/npm/build badges, and the language-links block. (2) **Replaced all 21
+  `README.<lang>.md`** with an identical 5-line pointer to the English README + upstream (no full
+  translation). (3) **Professional-fork practice for other docs:** added Fork-notice blocks to
+  `CONTRIBUTING.md` + `SECURITY.md`; left `AGENTS.md` (already fork-aware), `CONTEXT.md` (accurate
+  reference), `STATS.md`/`script/stats.ts` (generated upstream stats — flagged, FU-060), and `LICENSE`
+  (MIT, attribution preserved) as-is. Result: 24 files, +207/−2,794.
+- **Alternatives rejected:** keep-full-upstream + append a diff (redundant); delete the 21 translated
+  READMEs (harder than a pointer, loses the lang files); gut AGENTS.md (functional build doc).
+- **Consequences / revisit when:** Committed `cbfc738` + pushed `origin/dev` (`f094279..cbfc738`), FU-059
+  resolved (only the 24 doc files staged; s054's untracked `release.ts` left out). If the fork grows its own
+  npm package/CI/community, the "Upstream"/"Install & run" sections should gain fork-specific install/links.
+  If a MarkCode logo asset is produced, swap the logo `<img>` (currently reuses upstream's ornate SVG).
+  `STATS.md` decision still open (FU-060).

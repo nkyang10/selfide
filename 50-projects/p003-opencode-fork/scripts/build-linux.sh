@@ -34,10 +34,14 @@ fi
 export PATH="$BUN_DIR/bun-$OS-$ARCH:$PATH"
 cd opencode
 "$BUN" install
-# Pin a distinctive channel so this fork never shares SQLite state with another
-# opencode build on the same machine. Channel becomes the DB suffix
-# (opencode-<channel>.db, see packages/core/src/database/database.ts) and the
-# version tag (0.0.0-<channel>-<ts>). "dev" is too common and collides.
-OPENCODE_CHANNEL=mark-dev "$BUN" ./packages/opencode/script/build.ts --single
+# Decode the requested channel (default dev) into OPENCODE_VERSION via
+# packages/script/release.ts (DEC-037). OPENCODE_CHANNEL must stay "mark-dev":
+# it is the SQLite DB filename suffix (opencode-mark-dev.db) and pinning it here
+# guarantees this fork never shares state with another opencode build.
+CHANNEL="${1:-dev}"
+RELEASE="$(cd packages/script && NO_COLOR=1 "$BUN" release.ts --channel "$CHANNEL" --json)"
+VERSION="$(printf '%s' "$RELEASE" | sed -n 's/^  "version": "\([^"]*\)",$/\1/p' | head -1)"
+echo "[build-linux] channel=$CHANNEL version=${VERSION:-<unset>} (DB channel stays mark-dev)"
+OPENCODE_VERSION="$VERSION" OPENCODE_CHANNEL=mark-dev "$BUN" ./packages/opencode/script/build.ts --single
 echo "built:"
 ls -la packages/opencode/dist/*/bin/opencode
