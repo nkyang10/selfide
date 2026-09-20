@@ -391,3 +391,7 @@
 | 2026-09-19 13:40 | s058 | commit | fork: git add (10 FE-016 files) + commit 2b6c3a2 + push origin dev (92678c1..2b6c3a2) | 0 | FE-016 staged only; rebrand files left for FU-061 |
 | 2026-09-19 13:41 | s058 | commit | fork: git add (3 rebrand files) + commit f2fe4cd + push origin dev (2b6c3a2..f2fe4cd) | 0 | FU-061 closed |
 | 2026-09-19 13:42 | s058 | doc | closed FU-061/FU-062/FU-064, updated current-state.md + p003 README FE-016 + s058 session record | 0 | enhancement + rebrand committed/pushed/deployed |
+| 2026-09-20 03:59 | s059 | edit | fork packages/app/src/pages/session/timeline/message-timeline.tsx: added rearrangeTabsAfterSlim() helper invoked after compact-create-new-session; reorder new tab next to original, rename original session " [ended]", close original tab | 0 | typecheck (turbo 30/30) + lint 0 err + vite build pass |
+| 2026-09-20 03:59 | s059 | check | fork tsgo -b, oxlint, vite build, bun turbo typecheck | 0 | all green; no unit tests added (reorder/close are existing primitives) |
+| 2026-09-20 04:15 | s060 | edit | fork packages/app/src/components/prompt-input.tsx: added isTouchDevice() helper (coarse pointer | maxTouchPoints>0, SSR-safe) + in handleKeyDown plain-Enter now inserts "\n" via addPart instead of submit on touch devices | 0 | bun tsgo typecheck clean; 750 unit tests pass (0 fail) |
+| 2026-09-20 04:16 | s060 | doc | opened s060 session record; updated current-state.md + open-followups.md | 0 | mobile touch Enter=newline implemented |

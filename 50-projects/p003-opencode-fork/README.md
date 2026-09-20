@@ -14,6 +14,11 @@ on health-version change (new deploy) a persistent toast with a **Refresh** butt
 cursor page via `createPagedHomeSessions`/`fetchHomeSessionPage`; SSE events re-fetch page 1. The
 **search full-scan is lazy** (runs only when search focused) so refresh no longer scans the whole table.
 **Committed `2b6c3a2` + pushed** to `origin/dev` (FE-016), plus s056 rebrand `f2fe4cd` (FU-061).
+**FE-017 (s059/s060, committed `4b21d04`):** — Compact-and-new-session tab behavior — slim now
+ re-places the fresh tab directly after the ended session, renames that session `<title> [ended]`, and
+ closes its tab (see `## FE-017`).
+**FE-018 (s060, committed `4b21d04`):** — Mobile touch-device detection: on `coarse`-pointer/`maxTouchPoints>0`
+ devices, plain Enter in the prompt inserts a newline instead of submitting; Shift+Enter/IME unchanged (see `## FE-018`).
 **Deployed** s044: 0.0.0-mark-dev-202609161421 (pid 3434396) — FE-014/FE-015 (see above).
 Previous: s029 (0.0.0-mark-dev-202609140012, pid 1557456) — **FE-013 picker rebuilt onto Zag.js
 TreeView**: the buggy `@pierre/trees` web-component browse tree is replaced by a Solid-native
@@ -264,6 +269,36 @@ typecheck --filter=@opencode-ai/app`) clean.
 
 **Verify:** manual — click DEV in the titlebar, confirm the menu opens and each item behaves (Home
 navigates, Refresh reloads, Debug tools toggles).
+
+## FE-017 — Compact-and-new-session tab lifecycle (DONE, s059/s060; committed `4b21d04`)
+
+When using "Compact and start a new session with this summary" in an agentic chat
+(`session.slim`, `slimSession()` in `packages/app/src/pages/session/timeline/message-timeline.tsx`),
+the fresh session tab now:
+1. **sits directly after the original tab** (reordered next to it),
+2. the **original session is renamed to `<title> [ended]`** (server-side, guarded vs. double suffix),
+3. the **original tab is closed** so the new tab occupies its exact slot.
+
+Impl: module-level `rearrangeTabsAfterSlim()` — registers the new tab (idempotent with the titlebar's
+route-change add), polls ≤2s for the Solid `startTransition` commit, uses existing `tabs.reorder` /
+`tabs.closeTab`, and renames the session via `sdk.api.session.rename`. The session (not just the tab
+info) is renamed because the tab title renders from `TabNavItem`'s `session().title ?? fallback`.
+
+**Verify:** typecheck (`bun turbo typecheck` 30/30) ✅, `oxlint` 0 err ✅, `vite build` ✅. Manual: slim a
+session, confirm the new tab appears immediately after and the previous one disappears renamed `[ended]`.
+
+## FE-018 — Mobile touch: Enter = newline, not submit (DONE, s060; committed `4b21d04`)
+
+In `packages/app/src/components/prompt-input.tsx`:
+
+- Added SSR-safe `isTouchDevice()` helper: true when `window.matchMedia("(pointer: coarse)").matches` OR
+  `navigator.maxTouchPoints > 0`.
+- In `handleKeyDown`, the plain-Enter submit branch now short-circuits on touch devices: inserts `"\n"`
+  via the existing `addPart` helper (same path as Shift+Enter) and returns, so the message is **not**
+  submitted. Shift+Enter and IME behavior unchanged. Submit on mobile is done via the send button.
+
+**Verify:** typecheck (`tsgo -b`) ✅, app unit tests 750/750 ✅. Manual: on a phone/tablet, plain Enter inserts
+a newline + keeps the keyboard open; desktop Enter still submits.
 
 ## Vendored clone state
 

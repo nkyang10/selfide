@@ -3,6 +3,21 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
+- **Last updated:** 2026-09-20 (UTC) — **s060: mobile touch Enter = newline not submit.** In the web chat
+  prompt (`packages/app/src/components/prompt-input.tsx`), added SSR-safe `isTouchDevice()` (coarse pointer via
+  `matchMedia("(pointer: coarse)")` OR `navigator.maxTouchPoints > 0`). In `handleKeyDown`, the plain-Enter
+  submit branch now short-circuits on touch devices and inserts `"\n"` via `addPart` (same path as Shift+Enter);
+  users submit via the send button. Shift+Enter / IME behavior unchanged. Typecheck ✅, unit tests 750/750 ✅.
+  **Not committed / not deployed** (user hasn't asked). Details:
+  `20-logs/sessions/2026-09-20_s060_mobile-touch-enter-newline.md`.
+
+- **Last updated:** 2026-09-20 (UTC) — **s059: FE — slim-session tab behavior.** "Compact and start a
+  new session" (session.slim) now: (1) places the fresh tab directly after the original, (2) renames the
+  original session `<title> [ended]`, (3) closes the original tab so the new tab occupies its slot.
+  Implemented via module-level `rearrangeTabsAfterSlim()` in `message-timeline.tsx` (reorder via existing
+  `tabs.reorder`, server-side rename guarded against double suffix, `tabs.closeTab`). **Not committed /
+  not deployed** (user did not request). Verified: turbo typecheck 30/30 ✅, oxlint 0 err ✅, `vite build` ✅.
+
 - **Last updated:** 2026-09-19 (UTC) — **s058: FE-016 Home Sessions AJAX cursor pagination.** Both Home
   lists (Projects-tab + Sessions-tab) load page 1 (limit **15**) on refresh and fetch further pages via
   **Load more** (`createPagedHomeSessions` hook + `fetchHomeSessionPage` in `home-sessions-paged.ts` /
