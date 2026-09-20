@@ -3,6 +3,31 @@
 > Snapshot of the last known state. Updated by the agent at the end of EVERY session.
 > If reality differs from this file, fix it immediately (drift check).
 
+- **Last updated:** 2026-09-19 (UTC) — **s058: FE-016 Home Sessions AJAX cursor pagination.** Both Home
+  lists (Projects-tab + Sessions-tab) load page 1 (limit **15**) on refresh and fetch further pages via
+  **Load more** (`createPagedHomeSessions` hook + `fetchHomeSessionPage` in `home-sessions-paged.ts` /
+  `home-session-index.ts`); SSE session events re-fetch page 1 to stay fresh. **Search scan is now lazy**
+  (full `loadHomeSessionIndex` runs only when search is focused) — page refresh no longer does the 5000-row
+  scan. Code-debt pass done (dropped dead `data.loading`/`paged.loading`/`reloadFirstPage` + in-memory slice
+  consts). **Deployed :4447** pid 1724164 v1.18.31-fork.1-dev (page-1 15). **Committed `2b6c3a2` + pushed**
+  `92678c1..2b6c3a2 dev->dev` (FU-064 ✅). Verified: typecheck ✅, home unit tests 6/6 ✅, `vite build` ✅.
+  Also committed+pushed the s056 terminal rebrand `f2fe4cd` (FU-061 ✅).
+
+- **Last updated:** 2026-09-19 (UTC) — **s057: DEC-033 read-only skills merge enhancement CLOSED.** User
+  picked up "skill list task" → confirmed it was the re-apply of the read-only merge (fold `.claude/skills` +
+  per-project skills into `/api/skill` as `editable:false` rows); reviewed current code and confirmed the merge
+  is NOT present (baseline clean). User then closed the enhancement; **no code changed**. Recorded so the
+  re-apply is not re-opened accidentally.
+
+- **Last updated:** 2026-09-19 (UTC) — **s056: rebrand terminal ASCII art "opencode" → "MarkCode".** The
+  web-daemon banner (`UI.logo` in `packages/opencode/src/cli/cmd/web.ts` line 47, shared with
+  upgrade/uninstall + the TUI app) reads "MarkCode" now. Authorized compact 4-line block art (left=`Mark`
+  gray / right=`Code` white, `_`/`^`/`~` shading marks kept) in **3 files**: `packages/tui/src/logo.ts`,
+  `packages/tui/src/util/presentation.ts` (session-epilogue header), `packages/opencode/src/cli/ui.ts`
+  (`wordmark`). Verified: old art gone (grep), render-sim reads "MarkCode", typecheck `@opencode-ai/tui`
+  (forced) + `opencode` **2/2 pass**. **NOT committed/pushed** (user hasn't asked) — 3 modified files in fork
+  working tree; `packages/script/release.ts` (s054) still untracked. Suggested msg: `chore(ui): rebrand CLI/TUI terminal art opencode → MarkCode`.
+
 - **Last updated:** 2026-09-19 (UTC) — **s055: lean fork README (strip upstream dup, point to upstream,
   highlight differences).** Rewrote `README.md` into a short MarkCode fork README: branding + "This is a
   fork" callout (→ upstream opencode.ai / anomalyco/opencode for install/CLI/desktop/integrations/plugins/

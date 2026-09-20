@@ -365,3 +365,29 @@
 | 2026-09-19 09:12 | s055 | verify | git diff --stat + anchor check + pointer md5 + grep "Quick start" | 0 | 24 files +207/−2794; anchor OK; no upstream dup left in READMEs |
 | 2026-09-19 09:11 | s055 | commit | git add README*.md CONTRIBUTING.md SECURITY.md && git commit "docs: lean fork README — point to upstream, highlight MarkCode differences" | 0 | commit cbfc738 (24 files, 207+/2794-); s054's release.ts left untracked |
 | 2026-09-19 09:12 | s055 | push | git push origin dev (PATH+=~/.bun/bin) | 0 | pre-push typecheck 30/30; pushed f094279..cbfc738 dev->dev |
+| 2026-09-19 09:20 | s056 | recon | locate terminal-banner art: web.ts cmd → UI.logo → wordmark (ui.ts) + @opencode-ai/tui/logo + presentation.ts 2nd copy | 0 | art lives in 3 files; TTY=two-tone gray/white, non-TTY=plain wordmark |
+| 2026-09-19 09:30 | s056 | research | searched online: "MarkCode ASCII art figlet" + figlet generators | 0 | no existing MarkCode art; no local figlet; online gens are client-side → author compact block art in existing style |
+| 2026-09-19 09:40 | s056 | edit | rebuild logo art (left=Mark right=Code) in packages/tui/src/logo.ts + presentation.ts + ui.ts wordmark | 0 | new art reads "MarkCode" (M a r k / C o d e), 4-line block font, marks preserved |
+| 2026-09-19 09:45 | s056 | verify | grep old art gone + render-sim via draw() logic + bun turbo typecheck --force tui/opencode | 0 | no old art remains; sim reads MarkCode; typecheck 2/2 pass |
+| 2026-09-19 09:20 | s057 | recon | read packages/core/src/skill.ts + schema/src/skill.ts (fork) | 0 | merge (DEC-033) NOT present in code; baseline clean (no record source, no editable flag, no mergeReadonly)
+| 2026-09-19 09:21 | s057 | close | session close-out per user: close the DEC-033 re-apply enhancement | 0 | enhancement closed/deferred; no code changed; user will open a separate task
+| 2026-09-19 10:15 | s058 | edit | home-sessions-controller.tsx: HOME_PAGE_SIZE=12, visibleCount signal, records() sliced, pagination.{canLoadMore,onLoadMore} exposed | 0 | pagination wired; search keeps full allRecords |
+| 2026-09-19 10:16 | s058 | edit | home-sessions.tsx + home-sessions-view.tsx: wire canLoadMore/onLoadMore props; Load-more ghost button after groups | 0 | view renders Load more when canLoadMore() |
+| 2026-09-19 10:17 | s058 | verify | bun run typecheck (tsgo -b, pinned bun 1.3.14) | 0 | PASS |
+| 2026-09-19 10:18 | s058 | verify | bun test --conditions=solid --preload ./happydom.ts ./src/pages/home | 0 | 2 pass / 0 fail |
+| 2026-09-19 10:19 | s058 | verify | bun run build (vite app pkg) | 0 | dist produced OK |
+| 2026-09-19 10:20 | s058 | deploy | ./deploy-web-4447.sh --detach (kills own host pid 658386, detached) | 0 | deploy in background -> testing/deploy-4447.log |
+| 2026-09-19 10:55 | s058 | deploy | deploy-web-4447.sh --detach completed | 0 | New server pid 1282724 on :4447, v1.18.31-fork.1-dev; FE-016 "Load more" marker in dist/index-D8pJokJp.js; /api/health = UnauthorizedError (login gating, expected) |
+| 2026-09-19 12:45 | s058 | edit | home-session-index.ts: added fetchHomeSessionPage (single page + cursor + hasMore); new home-sessions-paged.ts (createPagedHomeSessions hook + mergeSessionPages) | 0 | page-1 query + cursor loadMore; events -> reload page1 |
+| 2026-09-19 12:46 | s058 | edit | home-sessions-controller.tsx + home-sessions-table-controller.tsx: swapped eager loadHomeSessionIndex for paged hook; dropped dead data.loading | 0 | both lists AJAX-cursor paginated |
+| 2026-09-19 12:47 | s058 | edit | home-session-search-controller.ts: owns lazy eager index (enabled when focused); removed dependency on sessions.data.searchRecords/loading | 0 | refresh no longer scans full table |
+| 2026-09-19 12:48 | s058 | edit | home.tsx + home-sessions.tsx + home-sessions-view.tsx + home-sessions-table.tsx: wired canLoadMore/loadingMore/onLoadMore + Load-more button (variant=loading) | 0 | both lists show Load more |
+| 2026-09-19 12:49 | s058 | test | new home-sessions-paged.test.ts (fetchHomeSessionPage + mergeSessionPages) | 0 | 6 pass / 0 fail |
+| 2026-09-19 12:50 | s058 | verify | bun run typecheck (tsgo -b) + bun test ./src/pages/home + bun run build | 0 | all pass; dist built ~10s |
+| 2026-09-19 12:51 | s058 | review | code-debt review of all modified/uncommitted code | 0 | removed dead data.loading/paged.loading/reloadFirstPage + in-memory slice consts; kept projectDirectories dup + ctx! (guarded); 9 files 173+/83- |
+| 2026-09-19 13:05 | s058 | deploy | deploy-web-4447.sh --detach completed | 0 | New server PID 1721612 :4447 v1.18.31-fork.1-dev; FE-016 AJAX markers (home-sessions-load-more + home-sessions-table-load-more) in dist/index-DPGgRWzF.js; /api/health = UnauthorizedError (login gating, expected) |
+| 2026-09-19 13:20 | s058 | edit | page 1 limit 64->15 (HOME_SESSION_PAGE_LIMIT=15 / HOME_SESSION_TABLE_PAGE_LIMIT=15 in both list controllers); retain cap stays 64 | 0 | typecheck + tests 6/6 + build pass |
+| 2026-09-19 13:30 | s058 | deploy | deploy-web-4447.sh --detach completed | 0 | New server PID 1724164 :4447 v1.18.31-fork.1-dev; page-1 limit now 15 (bundled const, no runtime marker); /api/health = UnauthorizedError (login gating) |
+| 2026-09-19 13:40 | s058 | commit | fork: git add (10 FE-016 files) + commit 2b6c3a2 + push origin dev (92678c1..2b6c3a2) | 0 | FE-016 staged only; rebrand files left for FU-061 |
+| 2026-09-19 13:41 | s058 | commit | fork: git add (3 rebrand files) + commit f2fe4cd + push origin dev (2b6c3a2..f2fe4cd) | 0 | FU-061 closed |
+| 2026-09-19 13:42 | s058 | doc | closed FU-061/FU-062/FU-064, updated current-state.md + p003 README FE-016 + s058 session record | 0 | enhancement + rebrand committed/pushed/deployed |

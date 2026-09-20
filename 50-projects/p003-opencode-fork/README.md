@@ -9,6 +9,11 @@ last-prompt subtitle, **FE-007** home Sessions-tab row → mobile-first multi-li
 **Home page** / **Refresh** / **Debug tools** (dropdown now renders in prod builds too, not just DEV).
 **FE-015 deployed s044:** server-update **Refresh toast** — `/api/health` returns `{healthy,version}`;
 on health-version change (new deploy) a persistent toast with a **Refresh** button is shown.
+**FE-016 deployed s058 (done):** Home **Sessions AJAX cursor pagination** — both Home lists
+(Projects-tab + Sessions-tab) fetch page 1 (limit **15**) on refresh and **Load more** fetches the next
+cursor page via `createPagedHomeSessions`/`fetchHomeSessionPage`; SSE events re-fetch page 1. The
+**search full-scan is lazy** (runs only when search focused) so refresh no longer scans the whole table.
+**Committed `2b6c3a2` + pushed** to `origin/dev` (FE-016), plus s056 rebrand `f2fe4cd` (FU-061).
 **Deployed** s044: 0.0.0-mark-dev-202609161421 (pid 3434396) — FE-014/FE-015 (see above).
 Previous: s029 (0.0.0-mark-dev-202609140012, pid 1557456) — **FE-013 picker rebuilt onto Zag.js
 TreeView**: the buggy `@pierre/trees` web-component browse tree is replaced by a Solid-native

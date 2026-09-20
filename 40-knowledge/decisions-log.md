@@ -776,3 +776,46 @@ Format:
   npm package/CI/community, the "Upstream"/"Install & run" sections should gain fork-specific install/links.
   If a MarkCode logo asset is produced, swap the logo `<img>` (currently reuses upstream's ornate SVG).
   `STATS.md` decision still open (FU-060).
+
+## DEC-039 — Rebrand terminal ASCII art to "MarkCode" (3 shared sources, keep block style)
+
+- **When:** 2026-09-19 (s056)
+- **Context:** user asked to change the "opencode" ASCII art the web daemon prints (its terminal banner) to
+  "MarkCode", with "search online". Research: the banner comes from `UI.logo()` (web.ts line 47, shared with
+  `upgrade`/`uninstall`), which renders a **plain `wordmark`** (non-TTY) or a **two-tone `glyphs.left`/`right`**
+  (TTY: left=dim gray `\x1b[90m`, right=default white, with `_`/`^`/`~` shading marks) from
+  `@opencode-ai/tui/logo`. That same logo feeds the main TUI `Logo` component and the session-epilogue
+  header in `packages/tui/src/util/presentation.ts` (a 2nd copy). Web search confirmed no existing
+  "MarkCode" art; no local figlet; online generators are client-side → hand-authoring in the existing 4-line
+  block font is the consistent choice.
+- **Decision:** Replaced the art in all **3** files with `Mark`/`Code` glyphs in the same 4-line block font
+  (letters 4×4, 1-space gap; left 19 chars = `Mark`, right 19 chars = `Code`): `packages/tui/src/logo.ts`,
+  `packages/tui/src/util/presentation.ts`, `packages/opencode/src/cli/ui.ts` (`wordmark`, marks→plain:
+  `_`→space, `^`→`▀`). Kept the two-tone TTY coloring + shading marks. Verified with a render-sim of the
+  exact `draw()` and forced typecheck (2/2).
+- **Alternatives rejected:** standard ASCII figlet banner (would change the 4-line compact style + require
+  restructuring the renderer); a web-generated banner (no server-side API found).
+- **Consequences / revisit when:** NOT committed/pushed yet. If a MarkCode logo asset / new design arrives,
+  re-apply across the same 3 files. Other branded surfaces (web app title, favicon `site.webmanifest`) already
+  say MarkCode (s053 + pre-existing fork build).
+
+## DEC-040 — Home Sessions list: AJAX cursor pagination (Load more) + lazy search scan (s058)
+
+- **Date:** 2026-09-19 (UTC), session s058
+- **Decision:** Both Home session lists (Projects-tab + Sessions-tab) are **cursor-paginated by server
+  round-trip**: on refresh only page 1 (limit 64) is fetched; a **Load more** ghost button
+  (`common.loadMore`) calls `fetchHomeSessionPage` with the returned `cursor.next` and appends
+  (`createPagedHomeSessions` hook in `home-sessions-paged.ts`). Page 1 is a tanstack query (refetch on
+  mount/reconnect); SSE session events trigger a cheap page-1 reload so the top stays fresh. The eager
+  full-table scan (`loadHomeSessionIndex`) moved into the **search controller and is lazy** (enabled only
+  while the search is focused), so a page refresh that never opens search performs no 5000-row scan.
+- **Rationale:** mobile-first performance and a real reduction in refresh load time — the previous approach
+  rendered a fixed in-memory slice over an eagerly full-scanned index. Load-more-by-AJAX means fewer bytes
+  and no unbounded scan on every Home mount.
+- **Alternatives rejected:** classic numbered pager (no "next page" model for a time-sorted feed; more taps);
+  virtualized infinite scroll (complexity, no "how many remain" signal); keeping the eager full-index scan
+  just to satisfy search (defeats refresh-time saving — search is deferred instead).
+- **Consequences / revisit when:** search results are limited to the retained index (search runs the same
+  `retainHomeSessions` trim as before). `projectDirectories`/`projectByID` duplication exists in the list +
+  search controllers (kept: small + stable). If the per-directory retain cap must shrink, revisit
+  `retainHomeSessions`. Deploy via `deploy-web-4447.sh --detach`; fork source not yet committed (FU-064).
