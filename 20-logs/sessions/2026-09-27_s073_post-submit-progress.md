@@ -231,3 +231,35 @@ fresh profile's prompt answered by `dgx/general`, with the progress row up throu
 **Standing caveat, unchanged:** the parallel session's 85 files ship **uncommitted**. The binary is
 therefore not reproducible from `origin/dev` yet (DEC-052's concern, in the other direction) — the honest
 follow-up is for that session to commit, after which `origin/dev` and `:4447` describe the same code.
+
+## "Push all first, then fix" — closing the loop
+
+**Pushed everything, both repos.** fork `dev` → **`d78e8f4`** (my three FE-022 commits plus the parallel
+s074/s076/s077 sessions' 85 files, committed **unchanged** and labelled as theirs in the commit body, with
+the gates re-run at commit time: `bun turbo typecheck` 30/30, app unit 780/0); `ide` `main` → **`a07bbec5f`**
+(five session records, two plan notes, DEC-051/052, state, follow-ups, command log). Secret-scanned both
+first: **0 occurrences of the LAN gateway key**; the `token` hits are translation strings and one doc
+sentence. The pre-push hook ran normally this time (no `--no-verify`).
+
+**Then fixed the thing the push exposed: the deploy is now traceable.** `git status` clean means the tree
+that produced `1.1.20260927153151` *is* `origin/dev` — and I checked that independently rather than
+asserting it: the only files modified after the 23:32 build are `packages/app/dist/**` (build output), no
+source. So the binary, the working tree and git now describe the same thing, which is the reproducibility
+gap DEC-052 exists to prevent (this time in the other direction: uncommitted work *was* deployed, and
+committing exactly those files closed it).
+
+**Then closed the verification gap I had left open** — I had only proven FE-023/FE-025's *markers* were in
+the bundle, never that their UI works:
+
+- **FE-023, live, 6/6** — DEV menu → Settings → **Admin**: categories
+  `[一般, 快速鍵, 伺服器, 提供者, 模型, Admin]`, the panel renders "Admin Web UI server" with the
+  auto-start switch and the port row, which correctly reports **"Running on port 4447"** and
+  **"OpenCode Desktop v1.1.20260927153151"** — i.e. the deployed build. 0 page errors.
+  Two probe bugs on the way (the settings control lives in the DEV menu, not on Home; the v1 message list
+  carries no `summary`) — both were mine, not the app's.
+- **FE-025, by its own specs, 13/13** — collapse on a second click, keyboard toggle with the count as the
+  accessible name, one collapsed row that keeps the turn's line totals, state kept across a reload, the
+  overflow control not collapsing the group, and a rename-only turn reporting no totals and still toggling.
+  Its *live* rendering in a real session is still unobserved, because **no session in the `ide` project has
+  changed files** (the parallel session's edits were in the fork checkout, a different project) — the spec
+  is the honest instrument there.
