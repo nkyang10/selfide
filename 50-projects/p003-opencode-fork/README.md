@@ -28,14 +28,18 @@ sessions (`rss/rss.ts` + `/rss/:token` public-by-token, `/api/rss/url` auth-gate
 Settings › Notifications with a copyable row/dialog; feed `<link>` honors the request Host (RFC-relative).
 Also fixed 3 typecheck errors in the WIP (`Effect.gen`+`yield*` for the on-disk feed, `Global.Path.state`
 instead of an unsatisfied `Global.Service`, `ServerAuth.Config.layer` on the route).
-**FE-020 (s069, DEC-045 — committed `c1f1b58` + pushed, DEPLOYED in the s071 build):** — **every folder you
-open is a project.** Engine records every opened directory in `project_directory` (including the shared
-`global` project, which is where a directory without a git repository lands) and emits
-`project.directories.updated`; the app loads those directories as a query and merges them into the
-server-truth Home list, so a non-git folder picked in the selector now appears and is selectable on **every**
-server section. Home `add` no longer runs `git init` on empty folders. Picker: absolute path in the text box,
-suggestions driven by typing only, and confirming with nothing selected is no longer possible (it used to hand
-the tree root `/` to the caller). See `## FE-020` + DEC-045.
+**FE-020 (s069, DEC-045 — SHIPPED: `c1f1b58` + fix `cb67c4a` on `origin/dev`, DEPLOYED and live-verified
+18/18 on build `1.1.20260927072837` / pid 3654762):** — **every folder you open is a project.** A directory
+without a git repository resolves to the shared `global` project and had no row anywhere, so it vanished from
+the server-truth Home list. It is now recorded when a client **opens** it (`project/current` →
+`Project.recordOpenedDirectory`) and announced as `project.directories.updated`; the app lists the global
+project's directories through a query that backs the `folder` store, and merges them into the Home list of
+**every** server, so a plain folder appears, is selectable, and has no "Edit project". Home `add` no longer runs
+`git init`. Picker: absolute path in the text box, suggestions on typing only, and confirming with nothing
+selected is no longer possible (it used to hand the tree root `/` to the caller). **Two defects were found only
+by running it live:** recording on *resolve* made every browsed folder a project (33 rows of `/usr`, `/boot`,
+`/proc`…), and the folder query never reached the server route at all (not in the generated client; the v1 compat
+layer substitutes `worktree.list()`). See `## FE-020` + DEC-045.
 **FE-021 (s070, DEC-047 — COMMITTED `5d6b47a` + PUSHED, NOT DEPLOYED):** — the "Thinking" row's elapsed
 number becomes a **pair**: `· A / B` = *seconds since the last model output* / *seconds since the user prompt*, with
 a localized tooltip that also prints the **absolute clock time** of the last output. New
@@ -47,7 +51,9 @@ fingerprint of the turn's parts (`part.text.length` included) compared against t
 using `on(…, { defer: true })` was an **infinite reactive loop** and was replaced (DEC-047 has the full trap list).
 Rendering reuses the already-translated `ui.message.duration.seconds` / `.minutesSeconds`; the row is gated on
 `B > 0` because `A` is legitimately `0` while the model streams. See `## FE-021` + DEC-047.
-**Deployed** s071: `1.1.20260927065342` (pid 3613950) — **FE-020** (`c1f1b58`) **plus** the **DEV-menu utility
+**Deployed (latest) s069-fix: `1.1.20260927072837` (pid 3654762)** — FE-020 **including the live-found fix
+`cb67c4a`** (record on *open* not on *resolve*; the app calls `GET /project/{projectID}/directories` itself),
+Playwright-verified 18/18. Previous: s071 `1.1.20260927065342` (pid 3613950) — **FE-020** (`c1f1b58`) **plus** the **DEV-menu utility
 items** (DEC-046: the top-left DEV dropdown also offers Log out / Settings / Help, reusing the project page's
 handlers + i18n keys). **Correction (s070):** the earlier note here claimed this binary also carries the parallel s070 WIP
 (`turn-activity.ts` + timeline changes + all locales). It does **not** — the build started ~06:53 UTC and those
@@ -336,104 +342,61 @@ In `packages/app/src/components/prompt-input.tsx`:
 **Verify:** typecheck (`tsgo -b`) ✅, app unit tests 750/750 ✅. Manual: on a phone/tablet, plain Enter inserts
 a newline + keeps the keyboard open; desktop Enter still submits.
 
-## FE-020 — Every folder you open is a project (CODE COMPLETE + REVIEWED, NOT BUILT — s069, DEC-045)
+## FE-020 — Every folder you open is a project (SHIPPED + LIVE-VERIFIED — s069, DEC-045)
 
 **Bug:** Home ▸ Projects ▸ *Add project* + a folder **without a git repository** → the dialog closes and
 nothing changes. Measured on :4447: only `file.list` + `project/current?directory=X` fire, `project/current`
-returns `id: "global"`, the project list is unchanged, the session list goes empty. A *git* folder works
-(a prepared folder was registered instantly).
+returns `id: "global"`, the project list is unchanged, the session list goes empty. A *git* folder works.
 
 **Why:** a project is a **git identity** — remote-url hash → id cached in `<git>/opencode` → first root commit
-sha (a prepared folder's id was literally its commit sha). A directory with no repo resolves to the shared
-`global` project, and `Project.saveProjectDirectory` returned early for it, so the folder was recorded
-nowhere. Since s043 the Home list is server truth, so there was no row to render. `git init` does not help: a
-repo with no commits still resolves to `global`, and `initGit` even repoints the global project's own
-`worktree`. Details in `40-knowledge/opencode-server-api.md` → "Projects, directories and plain folders".
+sha. A directory with no repo resolves to the shared `global` project and `Project.saveProjectDirectory`
+skipped it, so the folder was recorded nowhere. Since s043 the Home list is server truth, so there was no row to
+render. `git init` does not help: a repo with no commits still resolves to `global`, and `initGit` even
+repoints the global project's own `worktree`. Details in `40-knowledge/opencode-server-api.md` →
+"Projects, directories and plain folders".
 
-**Change (11 files + 1 test file, 2 new):**
-- `opencode/src/project/project.ts` — `saveProjectDirectory` records the global project too and reports
-  whether a row was created; `fromDirectory` emits `project.directories.updated` on the global bus when so,
-  and records **the directory that was opened**, not `ProjectV2.resolve`'s output: a repository-less directory
-  resolves to `directory: "/"`, so passing the resolved value would remember the filesystem root instead of
-  the folder (caught in review — the first version of this change had exactly that bug, and the new test in
-  `opencode/test/project/project.test.ts` fails against it).
-- `core/src/project/directories.ts` — re-exports the schema's directories `Event` on the module namespace
-  (publishing from core with an `EventV2.node` dep is a module-init cycle — do not retry).
-- `app/.../global-sync/bootstrap.ts` — `loadProjectFoldersQuery` (`GET /project/global/directories`); a
-  failure degrades to an empty list so an older server still boots (the `catch` sits **outside** `retry`, so
-  a transient failure is actually retried).
-- `app/.../context/server-sync.tsx` — `folder` is a **getter over the `[scope, "project-folder"]` query**
-  (same shape as `path`/`provider`/`config`), so every refetch — reconnect, the directories event, an
-  explicit fetch after `add` — updates it without a separate store write.
-- `app/.../pages/home/home-project-folders.ts` (new) — `mergeProjectFolders()` / `isPlainFolder()`, deduped
+**Engine** (`c1f1b58` + `cb67c4a`, 14 files):
+- `opencode/src/server/routes/instance/httpapi/handlers/project.ts` — `project/current` calls
+  `Project.recordOpenedDirectory`: **opening** a directory without a repository records it under `global` and
+  announces `project.directories.updated`. *Opening* is the trigger on purpose — resolving a project is also
+  what a directory *listing* does, so recording on resolve turned every folder the user scrolled past in the
+  picker (`/usr`, `/boot`, `/proc`, …) into a project: 33 rows from one test run, only visible live.
+- `opencode/src/project/project.ts` — `recordOpenedDirectory`; `fromDirectory` records a project's own
+  worktree only; the recorded value is the requested directory (`ProjectV2.resolve` collapses a repository-less
+  directory to `/`) and only a real directory is recorded (`fs.isDir`).
+- `core/src/project/directories.ts` — re-exports the schema's directories `Event` (publishing from core with an
+  `EventV2.node` dep is a module-init cycle — do not retry).
+
+**App:**
+- `app/src/utils/server.ts` — `fetchProjectDirectories`: `GET /project/{projectID}/directories` is a **server**
+  route the generated v2 client does not carry (it is not in the default protocol API) and the v1 compat layer
+  answers `project.directories` with `worktree.list()` (the instance's *sandbox worktrees*) — so the app calls
+  the route itself, same Basic auth as the SDK clients, same precedent as `/api/rss/url`.
+- `app/src/context/server-sync.tsx` / `global-sync/bootstrap.ts` — `[scope, "project-folder"]` query whose
+  result backs the `folder` store slice as a getter; a failure degrades to `[]` (and still retries: the `catch`
+  sits **outside** `retry`).
+- `app/src/pages/home/home-project-folders.ts` (new) — `mergeProjectFolders()` / `isPlainFolder()`, deduped
   against project worktrees *and* sandboxes by `pathKey`.
-- `app/.../pages/home/home-controller.ts` — one `projectsFor(data)` feeds both the focused list and
-  **every** server section (`forServer` used to return the per-device store, so a remote server's plain
-  folders were missing); `select` accepts a plain folder; `add` drops `initGit` and refetches the folder list.
-- `app/.../pages/home/home-projects-view.tsx` — "Edit project" hidden for id-less folder rows.
-- Picker: `dialog-select-directory-v2.tsx` + `directory-picker-domain.ts` — absolute path in the text box,
-  suggestions driven by a `searchInput` signal (typing only), directory-mode `result()` with no implicit root
-  fallback, `pickerRootSelection()` so a suggestion click is confirmable.
+- `app/src/pages/home/home-controller.ts` — one `projectsFor(data)` feeds the focused list **and every server
+  section**; `select` accepts a plain folder; `add` drops `git init` and refetches the folder list.
+- `app/src/context/global.tsx` — the recently-closed filter knows plain folders.
+- `app/src/pages/home/home-projects-view.tsx` — no "Edit project" on a folder row.
+- Picker: `dialog-select-directory-v2.tsx` + `directory-picker-domain.ts` — only an explicit selection resolves
+  (no implicit tree-root fallback), the textbox shows the absolute path, suggestions follow typing only.
 
-**Verify:** root `bun typecheck` (the pre-push gate) 30/30 ✅ · app unit 755/1 (the 1 = pre-existing i18n
-parity, FU-076) ✅ · `test/project/` 89/0 (the new plain-folder test fails against the pre-fix line) ✅ ·
-`test/server/` 2 fails, both pre-existing (re-proven with the change stashed) ✅ · core 1 pre-existing fail ✅ ·
-oxlint 0 on the changed files ✅. **Review pass (third, same day) fixed 5 more findings:** the recorded directory is now validated with
-`fs.isDir` (a stale tab / typo / deleted path used to leave a permanent, unopenable row in the list), the
-recently-closed filter also accepts plain folders, `pickerMode().result` lost its unread `root`
-parameter, `isPlainFolder` is now the guard the view actually uses, and `pickerRootSelection` moved next
-to `pickerMode`. **Committed + pushed to `origin/dev`; still not built/deployed (FU-079)** — build + live
-verification come next.
+**Verified live** (Playwright, build `1.1.20260927072837`, pid 3654762) — **18/18**: confirm stays disabled until
+a folder is picked · tree click shows an absolute path · a tree click fires **no** root-wide `find/file` ·
+typing drives the search · a plain folder appears in the list, is selectable and loads its session view · its
+row has no "Edit project" (a git row still does) · the server recorded it under `global` · **browsing recorded
+nothing** · the folder got no project row of its own.
 
-## FE-021 — "Thinking" shows last-model-output / since-your-prompt (COMMITTED `5d6b47a`, NOT DEPLOYED — s070, DEC-047)
+**Gates:** root `bun typecheck` 30/30 (pre-push) · app unit **766/766** (i18n parity finally green) ·
+`test/project/` 93 · `test/server/` 2-3 pre-existing failures (`project-copy`; `httpapi-listen` fails in this
+environment — 95/128 inotify instances used, reproduced with the changes stashed).
 
-**Ask:** the Thinking row already showed an elapsed time (s048 / FU-055), but it answered the wrong
-question. Make it a pair so the user can tell **when the model last produced something** and **how long
-the prompt has been running**:
-
-```
-🌀 Thinking · 12s / 1m 45s
-             │    └── B: since your prompt
-             └─────── A: since the last model output
-```
-
-Hover the pair for `12s since the last model output (14:32:05) · 1m 45s since your prompt` (the absolute
-clock time is the "when" the mobile numbers cannot give you).
-
-**Why the old number was wrong:** its base was `lastAssistantMessage.time.created` — *the start of the
-current LLM step*, not the last output. Worse, a streaming `text`/`reasoning` part keeps its original
-`time.start` while tokens keep arriving, so the counter climbed steadily through a perfectly healthy
-stream. The server can only stamp a part when it is *created*; the client is the one that sees each
-`message.part.delta` grow `part.text` in the store (`context/server-session.ts:1190`).
-
-**What was built**
-
-| File | Change |
-|---|---|
-| `pages/session/timeline/turn-activity.ts` | **new.** `latestTurnActivity({ messages, parts, observed })` → `{ at, key }`. `at` = max(server stamps ∪ client-observed arrival). `key` = turn fingerprint including each part's `text.length`, so an in-flight update is detectable. |
-| `pages/session/timeline/turn-activity.test.ts` | **new.** 9 cases: empty turn, message-only, tool end > start, running tool start, pending tool (no `time`), latest part wins, key changes while streaming / on tool start+finish, observed wins over a stale stamp but not a newer one. |
-| `pages/session/timeline/message-timeline.tsx` | `TimelineThinkingRow` takes `activityAt` + `promptAt` (was one `baseTime`) and renders `· A / B` + the tooltip; the `Thinking` case owns the fingerprint-vs-previous `createEffect` that stamps arrivals. |
-| `i18n/en.ts` + all 61 locales | one new key `session.thinking.elapsed`; the two duration formats reuse the **already-translated** `ui.message.duration.seconds` / `.minutesSeconds`. |
-
-**Three traps, all in DEC-047:** `on()` does not dedupe the single-dependency form, so the first version
-looped forever; the row must be gated on `B > 0` (gating on `A > 0` makes it flicker out on every delta
-while the model streams, because `A = 0` is the healthy case); and `ToolStatePending` carries no `time`.
-
-**Side effect — FU-076 closed:** the 6 `settings.general.notifications.rss.*` keys that existed only in
-`en.ts` + `tk.ts` were added to the other 60 locales with the English source copy (the FU-026 pattern), so
-`src/i18n` parity is now **13/13 green** and the app unit suite is **765/765**.
-
-**Gates:** root `bun turbo typecheck` 30/30 ✅ · app unit 765/765 (was 755/1) ✅ · `e2e/performance/unit`
-43/43 ✅ · oxlint `packages/app/src` 822 warnings / **0 errors**, identical to the pre-change baseline ✅ ·
-`vite build` ✅ (bundle contains `session.thinking.elapsed` + `session-turn-thinking-elapsed`) · prettier
-`--check` clean on every touched file ✅ (this also fixed one pre-existing formatting violation in
-`message-timeline.tsx`, the `session.compact` member chain).
-
-**Committed `5d6b47a` + pushed `origin/dev`** (pre-push typecheck 30/30), staged alone so the parallel
-s071 DEV-menu WIP stayed out. **Deployed** 07:28 UTC by the user: build `1.1.20260927072837`, **pid 3654762**, bundle
-`assets/index-BFF1n-Mg.js` — probed and confirmed to contain `session.thinking.elapsed` +
-`since the last model output`; health OK, FE-001 auth intact. Awaiting the user's visual check of the two
-numbers (FU-085).
+**Dev DB** (FU-080, closed): backed up to `/tmp/opencode/db-backup-before-fe020-cleanup.db`, then the `t-git`
+diagnosis rows and temp dirs removed, the `global` row reset to `worktree='/' , vcs=NULL`, and ~33 rows the
+browsing bug had created deleted.
 
 ## Vendored clone state
 

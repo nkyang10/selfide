@@ -90,3 +90,23 @@ RSS keys only in `en.ts` + `tk.ts`). In `packages/opencode`, `test/server/httpap
   to remove a dirty git worktree").
 - New test for FE-020: `cd packages/opencode && bun test test/project/project.test.ts -t "without a repository"`.
   It fails against the pre-fix line (`directory: data.directory`), which is how the bug was proven.
+
+## Live verification of FE-020 (2026-09-27) — what the browser found that tests could not
+
+- **Browser tooling that exists here:** no `playwright` package installed, but the *cache* does
+  (`~/.bun/install/cache/playwright@1.63.0@@@1`) and a matching browser is in `~/.cache/ms-playwright/chromium-1217`.
+  Import it by absolute path and pass `executablePath` so the revision check is bypassed:
+  `import { chromium } from "/home/mark/.bun/install/cache/playwright@1.63.0@@@1/index.mjs"` +
+  `chromium.launch({ executablePath: "/home/mark/.cache/ms-playwright/chromium-1217/chrome-linux/chrome", args: ["--no-sandbox"] })`.
+  The verification script lives at `/tmp/opencode/fe020/verify.mjs` (outside the repo on purpose).
+- **Getting into the app:** `/login` is a **server-rendered HTML form** (`form[action="/login"]`, fields
+  `input[name=username]` / `input[name=password]`, submit `button[type=submit]`), not a React screen. The Home
+  projects list is behind the **first segment of `[data-slot="segmented-control-v2-item"]`** (projects / sessions /
+  skills) — the default tab is sessions, so `data-action="home-add-project"` is not in the DOM until you click it.
+  Project rows are `div.group/project` (the text starts with the avatar initial, e.g. `ffe020-notes`).
+- **The UI is in Chinese** (`選擇資料夾` = "Select folder"), so match on `data-action` / `data-slot`, never on English text.
+- **Editing a live dev database:** back it up *first* (`cp opencode-mark-dev.db /tmp/opencode/<name>.db`, 630 MB),
+  then delete the specific rows and check both the table you edited and the `global` project row.
+- **Environmental trap:** 95 of 128 inotify instances were in use, so `test/server/httpapi-listen` ▸ *"rejects
+  unsafe PTY ticket mint and connect requests"* fails here with `inotify_add_watch … No space left on device`
+  (it is not a disk-space problem — `df` showed 507 G free). It reproduces with local changes stashed.

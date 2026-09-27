@@ -109,9 +109,25 @@ sha**. Measured: a prepared folder's project id was literally its commit sha. So
 
 **The recorded `project_directory.directory` is the directory that was *asked for*, not `ProjectV2.resolve`'s
 `directory` field.** For a directory without a repository that field is the filesystem root, so recording it
-would collapse every plain folder into a single `("/", global)` row. A repository records its own worktree
-(its subdirectories are the `sandboxes` entries). Rule in `fromDirectory`: `data.vcs ? data.directory :
-directory`. Guarded by a test in `packages/opencode/test/project/project.test.ts`.
+would collapse every plain folder into a single `("/", global)` row. Only a real directory is recorded
+(`fs.isDir`). Guarded by tests in `packages/opencode/test/project/project.test.ts`.
+
+**Two trigger rules, both learned by breaking them (DEC-045, FE-020):**
+- A repository-less directory is recorded by the **`project/current` handler** (`Project.recordOpenedDirectory`),
+  *not* by `fromDirectory`. Resolving a project is also what a directory **listing** does, so recording on
+  resolve makes every folder the user scrolls past in the directory picker a "project" (measured: 33 rows —
+  `/usr`, `/boot`, `/proc`, `opencode-test-*`…). A repository is recorded from `fromDirectory` as before.
+- Only an *open* counts: browsing, searching and previews must never write a row.
+
+**Reading it back (the trap that kept the feature broken):** `GET /project/{projectID}/directories` is a
+**server** HttpApi route. The generated v2 client is compiled from the default Protocol surface
+(`makeDefaultApi()`), which does **not** include it, and the app's v1 compatibility layer implements
+`project.directories` as `worktree.list()` → the *current instance's sandbox worktrees*
+(`project.sandboxes(ctx.project.id)`) — a different set, which is why the app once requested
+`/experimental/worktree` and never the real route. The app calls the route directly
+(`fetchProjectDirectories`, `packages/app/src/utils/server.ts`). Its response is a bare array
+`[{ directory }]` — **not** `{ data: [...] }`, and the v1 shim returns bare strings mapped to
+`{ directory }`, so both shapes collapse to the same string list.
 
 **Consequences to design around:**
 - `GET /project` lists **project identities**, so a folder without a repository has no row and cannot appear

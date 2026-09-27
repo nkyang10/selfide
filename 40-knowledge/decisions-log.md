@@ -954,16 +954,22 @@ has no remote and no root commit, so it still resolves to `global` (measured), a
 **Decision.** The list means **every folder that has been opened on the server**, and a folder does not have to
 be a repository:
 
-1. **Engine (additive).** `saveProjectDirectory` records every opened directory, global project included;
-   `fromDirectory` emits `project.directories.updated` on the global bus when a row is new. No schema change,
-   no SDK regen — `project_directory`, the `directories` endpoint and the client's refetch-on-that-event wiring
-   already existed (`server-sync.tsx:585-591`).
-   **The recorded value is the requested directory, not `ProjectV2.resolve`'s `directory`.** For a directory
-   without a repository that field is `"/"`, so recording it would collapse every plain folder into one `("/",
-   global)` row — the first implementation of this decision had exactly that bug, caught in review. A repository
-   still records its own worktree, so the rule is `data.vcs ? data.directory : directory`. Guarded by
-   `opencode/test/project/project.test.ts` ▸ *"should record a directory without a repository for the global
-   project"*, which fails against the resolved-value version.
+1. **Engine (additive).** A directory without a repository is recorded under the `global` project by
+   `Project.recordOpenedDirectory`, called from the **`project/current` handler** — the request a client makes
+   when it *opens* a directory (Home ▸ Add project, a tab, a session) — and a new row is announced as
+   `project.directories.updated` on the global bus. Repositories keep recording their own worktree in
+   `fromDirectory`. No schema change, no SDK regen: `project_directory`, the route and the client's
+   refetch-on-that-event wiring already existed.
+   **Two rules that only the live test could teach:**
+   - *The trigger must be "opened", not "resolved".* `fromDirectory` was the first home for this, and it is
+     wrong: resolving a project is also what every directory **listing** does, so browsing the picker recorded
+     every folder it listed — one run left 33 rows including `/usr`, `/boot`, `/proc`, and every
+     `opencode-test-*` dir. Anything that merely *reaches* a directory must not remember it.
+   - *The recorded value is the requested directory, not `ProjectV2.resolve`'s `directory`*, which is `"/"` for a
+     repository-less directory. And only a real directory is recorded at all (`fs.isDir`, the same check the
+     sandbox list uses), so a stale tab or a typo cannot leave an unopenable row.
+   Guarded by four tests in `opencode/test/project/project.test.ts` (not recorded on resolve; recorded on open;
+   a non-directory is not recorded; a repository is not recorded twice).
 2. **App.** Those directories load as a **query** (`[scope, "project-folder"]`) and merge into the Home list
    (`mergeProjectFolders`), deduplicated against project worktrees *and* sandboxes by `pathKey`. The `folder`
    store slice is a *getter* over that query, like `path`/`provider`/`config`, instead of a value written once
@@ -971,6 +977,15 @@ be a repository:
    that query after `project.current` resolves, rather than waiting for the event to travel back.
    The merge feeds **every** server section (`forServer` too), not only the focused one: it used to return the
    per-device store, which by construction knows nothing about another server's plain folders.
+   **The read path cannot go through the client layer.** `GET /project/{projectID}/directories` is a *server*
+   HttpApi route, and the generated v2 client is compiled from `makeDefaultApi()` (the default Protocol
+   surface), so the method does not exist there; the v1 compatibility layer *does* have
+   `project.directories` and answers it with `worktree.list()` → `project.sandboxes(ctx.project.id)`, i.e. the
+   current instance's sandbox worktrees. The app therefore calls the route itself
+   (`fetchProjectDirectories` in `packages/app/src/utils/server.ts`, same Basic auth as the SDK clients, same
+   precedent as `/api/rss/url`). **Lesson:** an invented method on a locally declared API type
+   (`type ProjectApi = { … readonly directories: … }`) is enough to satisfy the compiler while the method
+   exists on no client at all — extend the *real* client type or the call is unchecked.
 3. **No `initGit`.** Home's `add` no longer initialises a repository: it resolves the project (which is what
    makes the server record the directory). The composer path keeps its s033/FU-013 `initGit` for empty folders
    (proven on-device), but a folder no longer *needs* it to be usable.

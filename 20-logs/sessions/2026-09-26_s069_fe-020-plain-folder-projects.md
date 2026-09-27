@@ -239,3 +239,82 @@ Gates after the review: root `bun typecheck` 30/30 (pinned bun 1.3.14) · app un
 `test/project/` 90 pass / 1 skip / 0 fail · `test/server/` 297 pass / 2 pre-existing fails · oxlint: the only
 warning attributable to this change is fixed; everything else is pre-existing (checked warning-by-warning
 against my changed line ranges).
+
+---
+
+## Fourth pass: deploy + live verification — two more defects, only findable live (2026-09-27)
+
+Deployed `c1f1b58` (`scripts/deploy-web-4447.sh` → build `1.1.20260926165342`, pid 3613950) and drove the real
+UI with Playwright (chromium from the bun cache, server-rendered `/login` form, the Home segmented control's
+projects tab). The picker half was correct on the first try — but the **feature itself did not work**, and the
+unit tests could not have told me:
+
+### Defect 1 — the recording trigger was wrong (severe, user-visible)
+
+`fromDirectory` records a directory, and **resolving a project is what every directory *listing* does too**.
+Browsing the picker lists directories, so one test run left **33 rows** in `project_directory`: `/usr`,
+`/boot`, `/boot/grub`, `/var`, `/proc`, `/raid`, `/snap`, `/root`, `/lost+found`, every `opencode-test-*`
+temp dir… The user's project list would fill with system folders they merely scrolled past.
+
+Fixed: the recording moved to the **`project/current` handler** (`recordOpenedDirectory` on `Project.Service`) —
+the call a client makes when it *opens* a directory (Home ▸ Add project, a tab, a session) — and `fromDirectory`
+went back to recording only a project's own worktree. Verified live: after a full picker run the global project's
+directories are exactly the folders that were opened, `noise=[]`.
+
+### Defect 2 — the read path never worked (the feature was dead even for a correct folder)
+
+`loadProjectFoldersQuery` called `api.project.directories(...)`, and that never reached the route:
+- the generated v2 client is built from `makeDefaultApi()` (the **Protocol** default surface), which does not
+  contain `project.directories` at all — the route only exists in the **server** HttpApi, so it is never
+  generated;
+- the v1 compatibility layer *does* have a `project.directories`, and it answers with
+  `legacy().worktree.list()` → `project.sandboxes(ctx.project.id)` — the **current instance's sandbox
+  worktrees**, a different set. Browser evidence: the app requested `GET /experimental/worktree` and never
+  `GET /project/global/directories`.
+
+Fixed: the app calls the route itself via `fetchProjectDirectories` (`packages/app/src/utils/server.ts`) with the
+same Basic auth the SDK clients use — the same precedent as the `/api/rss/url` route. A server without the route
+resolves to `[]` instead of failing. The `ProjectApi` type I had extended with an invented
+`directories` method is gone — that invented type is exactly what let the type system accept a method that does
+not exist on either client.
+
+### Live result on the fixed build (`1.1.20260927072837`, pid 3654762) — 18/18
+
+| Check | Result |
+|---|---|
+| login, Home projects panel | pass |
+| picker opens | pass |
+| **confirm disabled until a folder is picked** (was: hands `/`) | pass — label `選擇資料夾`, preview empty |
+| **tree click shows the absolute path** (was: relative) | pass |
+| **tree click fires no root-wide `find/file`** (was: `directory=/`) | pass — 0 calls |
+| confirm enabled after a tree pick | pass |
+| suggestions follow typing only | pass — 3 search calls, 5 suggestions |
+| Enter on a typed path selects that folder | pass |
+| **plain folder appears in the Home list** | pass — row rendered |
+| selecting it loads its session view | pass — no error text |
+| **plain-folder row has no "Edit project"** | pass |
+| a git project row still has "Edit project" (control) | pass |
+| **server recorded the folder under the global project** | pass |
+| **browsing recorded no extra folders** | pass — `noise=[]` |
+| the folder got no project row of its own | pass |
+
+### FU-080 — dev DB cleaned (with a backup first)
+
+`cp opencode-mark-dev.db /tmp/opencode/db-backup-before-fe020-cleanup.db` (630 MB) before any write. Removed:
+20 system-directory rows + 3 `opencode-test-*` + 10 more system paths created by the browsing bug, the
+`fe020-folder` test rows and folder, the s069 diagnosis rows (`project` + `project_directory` for
+`/tmp/opencode/t-git`, temp dirs `/tmp/opencode/t-{git,plain,plain2,empty}`), and reset the `global` project
+row to `worktree='/' , vcs=NULL` (it had been repointed to `/home/mark/圖片` by a diagnostic `initGit`).
+Kept `/tmp/opencode` and `/home/mark/圖片` — real folders that are genuinely open. Remaining global directories:
+`/tmp/opencode`, `/home/mark/圖片`.
+
+### Also learned (not bugs, environment)
+
+- The app negotiates **protocol v1** on this server, which is why the compat layer is the code path that matters.
+- `packages/opencode` `test/server/httpapi-listen` ▸ *"rejects unsafe PTY ticket mint and connect requests"*
+  fails **in this environment** (95 of 128 inotify instances in use → `inotify_add_watch ... No space left on
+  device`); reproduced with all my changes stashed, so it is not FE-020.
+- The `bun` on `PATH` is 1.4.2; every gate and the build use the pinned 1.3.14.
+
+Commits: `c1f1b58` (the feature) and `cb67c4a` (this fix), both on `origin/dev`. A parallel process added
+`5d6b47a` and `96f8e79` in between; the push was a clean fast-forward.
