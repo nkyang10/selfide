@@ -1,6 +1,6 @@
 # rb-004 — OpenCode fork release (cut a beta/stable build)
 
-> Companion to `40-knowledge/versioning-strategy.md` (DEC-037). Carries build gates + tags + notes.
+> Companion to `40-knowledge/versioning-strategy.md` (DEC-042, supersedes DEC-037). Carries build gates + tags + notes.
 
 ## When
 
@@ -26,14 +26,14 @@
    ```bash
    git fetch upstream && git merge --no-ff upstream/dev
    ```
-3. **Cut the version** (via `packages/script/release.ts` — DEC-037):
+3. **Cut the version** (via `packages/script/release.ts` — DEC-042 unified `1.<MAJOR>.<YYYYMMDDHHMMSS>`):
    ```bash
-   # dev float (no tag):
+   # preview (no write) — prints 1.<MAJOR>.<UTC-ts> for each channel:
    bun packages/script/release.ts --channel dev --dry --json
-   # first candidate: roll beta
-   bun packages/script/release.ts --channel beta --bump   # writes 1.<MINOR>.<PATCH>-fork.<N>-beta.<M>
-   # stable promotes:
-   bun packages/script/release.ts --channel stable --bump # writes 1.<MINOR>.<PATCH>-fork.<N>
+   # first candidate: roll beta (increments MAJOR counter)
+   bun packages/script/release.ts --channel beta --bump   # 1.<MAJOR+1>.<ts>
+   # stable promotes (increments MAJOR counter again)
+   bun packages/script/release.ts --channel stable --bump # 1.<MAJOR+1>.<ts>
    ```
    `.env` emitted by the tool always keeps `OPENCODE_CHANNEL=mark-dev` — never change it (SQLite DB suffix).
 4. **Build + verify** (control-center helper wires release.ts → OPENCODE_VERSION):
@@ -56,4 +56,7 @@
   for azure, upstream install-message mismatch, `/status` 404 test) — do NOT block a release; open `20-logs/incidents/`
   only if a NEW failure appears.
 - `OPENCODE_CHANNEL` MUST remain `mark-dev` (DB isolation). Fork channel/version lives in `OPENCODE_VERSION` only.
-- First release after this runbook: confirm `/api/health` shows the `-fork.<N>` version before tagging.
+- Desktop packaging must run with `OPENCODE_VERSION` set (so `prepare.ts` + renderer `VITE_APP_VERSION` inherit the
+  unified `1.<MAJOR>.<ts>`).
+- First release after this runbook: confirm `/api/health`, webui Settings "v…", and desktop About all show the same
+  `1.<MAJOR>.<ts>` before tagging.

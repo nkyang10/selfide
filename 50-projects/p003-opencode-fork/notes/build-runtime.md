@@ -53,3 +53,40 @@ Runtime image parts arrive server-side as `{type:"file", mime, url:"data:image/.
 `packages/app/src/components/prompt-input/build-request-parts.ts`).
 
 
+
+## Running the unit tests (s069)
+
+`bun test <file>` on a single app test file **fails with a misleading error** — the app's test script sets
+resolution flags that a bare run does not:
+
+```
+SyntaxError: Export named 'use' not found in module '.../solid-js/web/dist/server.js'
+```
+
+Use the package script's flags (from `packages/app`, with the **pinned bun 1.3.14**, not the 1.4.x on PATH):
+
+```
+bun test --conditions=solid --preload ./happydom.ts ./src        # full suite (app)
+bun test --conditions=solid --preload ./happydom.ts src/<file>   # one file
+```
+
+Also: `bun test` from the repo **root** is blocked by a guard (`do-not-run-tests-from-root`) — run from the
+package dir. Two app-suite failures are pre-existing and unrelated to app work: the i18n parity test (FU-076,
+RSS keys only in `en.ts` + `tk.ts`). In `packages/opencode`, `test/server/httpapi-listen.test.ts`
+("default in-process handler does not emit Effect HTTP response logs") and `test/server/project-copy.test.ts`
+("requires force to remove a dirty git worktree") fail on the clean baseline too — re-prove with
+`git stash` before blaming a change.
+
+## s069: the gates that actually mean something (FE-020)
+
+- **Pre-push gate** = `.husky/pre-push` → `bun typecheck` at the repo root (**30 tasks**), not the per-package
+  checks. Run it with the pinned bun: `~/.cache/opencode-build/bun-1.3.14/bun-linux-aarch64/bun typecheck`.
+  A plain `bun typecheck` with bun 1.4.x is a false gate.
+- App unit tests: `cd packages/app && bun test --conditions=solid --preload ./happydom.ts` → **755 pass / 1 fail**,
+  the failure being the known i18n parity break (FU-076). Bare `bun test <file>` fails with a misleading
+  `solid-js/web … 'use'` error.
+- Known pre-existing failures, so they are not mistaken for regressions: `test/server/httpapi-listen`
+  ("does not emit Effect HTTP response logs"), `test/project/project-copy` + core `ProjectCopy` ("requires force
+  to remove a dirty git worktree").
+- New test for FE-020: `cd packages/opencode && bun test test/project/project.test.ts -t "without a repository"`.
+  It fails against the pre-fix line (`directory: data.directory`), which is how the bug was proven.

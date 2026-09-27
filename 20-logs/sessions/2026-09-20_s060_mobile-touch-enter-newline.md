@@ -27,9 +27,22 @@ caret instead of submitting the prompt. Shift+Enter and IME behavior are unchang
 - `bun run typecheck` (tsgo -b) — clean.
 - `bun test --conditions=solid --only-failures --preload ./happydom.ts ./src src/components/prompt-input` — 750 pass / 0 fail.
 
+## Deploy (FE-017 + FE-018), step 2
+
+User said "go". Committed the fork on `dev` as `4b21d04` and pushed to `origin/dev`. Also committed
+`message-timeline.tsx` (FE-017 slim-tab, pending from s059) in the same commit. Closure doc commit
+`6b888fef0` on ide `main`.
+
+Deployed per RB-003 with `scripts/deploy-web-4447.sh --detach`:
+
+- **New server pid 1788086** on `:4447` (pidfile `testing/.web-4447.pid`, log `testing/web-4447.log`).
+- Serves HEAD `4b21d04`, version `1.18.31-fork.1-dev`.
+- `GET /api/health` → `{"_tag":"UnauthorizedError",...}` (auth required, expected — same as prior deploys).
+- Login page active: any URL redirects to `/login`.
+
 ## Notes / Follow-ups
 
 - Touch detection does not re-evaluate on pointer-type change (e.g. hybrid devices). Acceptable
   trade-off; a `pointer` event listener could be added later if needed.
 - Confirm the mobile prompt shows a visible send button (submit path on touch). NOT verified on
-  real device.
+  a real device yet.

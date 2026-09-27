@@ -819,3 +819,252 @@ Format:
   `retainHomeSessions` trim as before). `projectDirectories`/`projectByID` duplication exists in the list +
   search controllers (kept: small + stable). If the per-directory retain cap must shrink, revisit
   `retainHomeSessions`. Deploy via `deploy-web-4447.sh --detach`; fork source not yet committed (FU-064).
+
+## DEC-041 — Server HTTP Basic auth stays the universal guard for the web UI (s061)
+
+- **Date:** 2026-09-20 (UTC), session s061
+- **Decision:** The web server's HTTP Basic username/password (`opencode` / `hahahaha`, launched via
+  `OPENCODE_SERVER_PASSWORD`, run-web.sh / deploy-web-4447.sh) remains the **universal guard for the whole
+  web UI**, on top of the app's cookie-based login page (`oc_creds`). Clear-cache resets only client-side
+  state + the cookie login; it must NOT remove Basic auth — JS cannot erase HTTP Basic credentials anyway,
+  and the user explicitly wants the credential checkpoint kept.
+- **Rationale:** single, server-side, token-less gate that protects the UI (and iOS PWA) at the network
+  layer outside the reach of any client-side state reset; belt-and-suspenders with the session cookie.
+- **Alternatives rejected:** removing Basic auth (leaves the LAN-exposed UI open); having Clear-cache try to
+  sign out of Basic (impossible from JS; would require redirect hacks with no real effect).
+- **Consequences / revisit when:** users must know the Basic creds as well as the app login. Revisit only if
+  a proper upstream identity provider replaces both layers.
+
+## DEC-042 — Unified user-facing version `1.<MAJOR>.<UTC-deploy-ts>` (webui + desktop) (s066)
+
+- **When:** 2026-09-24 (s066)
+- **Context:** the fork had three version-bearing surfaces — engine (`/api/health`, from `OPENCODE_VERSION`),
+  webui (`packages/app` Settings "v…", from `pkg.version`), and desktop wrapper (`app.getVersion()` →
+  About/updater/logging). Only the engine actually received a date-versioned build; webui + desktop still showed
+  the stale upstream `1.18.31`. User asked to unify the version number the two user-facing surfaces (webui +
+  desktop wrapper) show into a single string whose time part = deploy/package generation time, for all channels.
+- **Decision:** Replace DEC-037's intel SemVer (`MAJOR.MINOR.PATCH-fork.<N>`) for the **version string** with one
+  unified grammar across all channels (dev/beta/stable): **`1.<MAJOR>.<YYYYMMDDHHMMSS>`** (UTC). `1` = web-wrapper
+  product major; `<MAJOR>` = fork/feature major counter (increments per stable/beta cut via `--bump`); the last
+  field is the 14-digit UTC deploy/package timestamp. `OPENCODE_CHANNEL` **stays `mark-dev`** (SQLite DB suffix) —
+  unchanged.
+- **Implementation:** (1) `packages/script/release.ts` simplified to emit `1.<MAJOR>.<ts>` for all channels
+  (`readForkMajor` only trusts `<MAJOR>` when current == `^1\.(\d+)\.\d{14}$`); keeps lockstep package.json writes
+  + `OPENCODE_VERSION` env. (2) `packages/app/src/entry.tsx` platform.version prefers injected
+  `import.meta.env.VITE_APP_VERSION` (falls back to `pkg.version`). (3) `packages/opencode/script/build.ts` passes
+  `VITE_APP_VERSION=${Script.version}` when building the embedded webui → deployed webui = engine version.
+  (4) `packages/desktop/electron.vite.config.ts` renderer defines `import.meta.env.VITE_APP_VERSION` from
+  `OPENCODE_VERSION`; desktop wrapper `app.getVersion()` still flows via `prepare.ts` = `Script.version`
+  (must set `OPENCODE_VERSION` when packaging the desktop).
+- **Verified:** typecheck (app/opencode/desktop) clean; `release.ts --channel dev --json` → `1.1.<ts>`;
+  stable `--bump` → major `1.1`→`1.2`; app bundle contains injected version.
+- **Alternatives rejected:** keeping DEC-037 (still stale for webui/desktop); date-only (no major counter);
+  unifying only dev (user chose all channels).
+- **Consequences / revisit when:** desktop wrapper must be packaged with `OPENCODE_VERSION` set to inherit the
+  unified version (prepare.ts + renderer). Upstream base is no longer visible in the version string — track
+  upstream divergence in release notes instead. Revisit if the fork ever publishes to a registry (would need a
+  strict SemVer/tag).
+
+## DEC-043 — Settings v2 nav: flip TabsV2 orientation from a matchMedia signal on narrow screens (s067)
+
+- **Context:** the user asked whether Settings v2 could be made responsive so the category nav stops stealing width
+  from the key/value rows on narrow screens ("put the categories in a tab or something"), explicitly without a large
+  redesign. Study first: on a 390px phone the dialog is `min(100vw - 32px, 980px)` = **358px**, and the nav kept a
+  **side column** at every width (240px desktop → 144px below 640px), so the key/value area got ~214px — minus the
+  fixed `40px` inline padding on `.settings-v2-tab-header`/`.settings-v2-tab-body` = **~134px of usable row width**.
+- **Decision:** drive the **existing** `TabsV2` `orientation` prop from a `matchMedia("(max-width: 639px)")` signal
+  in `dialog-settings-v2.tsx` (`vertical` on wide, `horizontal` on narrow), and style the horizontal case as a
+  scrollable top tab strip. The nav's inner markup was flattened (7 nested `flex flex-col` Tailwind divs → `.settings-v2-nav`
+  > 2× `.settings-v2-nav-group` + footer) so the strip is a plain row (`display: contents` on the groups) with the
+  section titles + version footer hidden. Narrow screens also drop the header/body inline padding 40px → 16px.
+- **Why this is the cheap, safe path:** Kobalte keeps `orientation` as a **context accessor** — the root and list
+  render `data-orientation`, the list also `aria-orientation`, and `TabsKeyboardDelegate` reads `this.orientation()`
+  at key-event time. So a runtime flip updates layout, ARIA and arrow-key direction together, with no remount and no
+  lost tab state. `TabsV2` (ui package) was **not** modified; all new CSS lives in the app package
+  (`settings-v2.css`) scoped under `.settings-v2[data-variant="settings"][data-orientation="horizontal"]`.
+- **Breakpoint 640px** = the breakpoint already used in this file for row wrapping and control stacking, so the nav
+  flip and the row layout flip together.
+- **Alternatives rejected:** (a) pure CSS `display:contents` on the existing 7 nested divs — brittle, breaks on any
+  markup edit, and still leaves the section titles/footer in the strip; (b) CSS-only orientation flip
+  (`flex-direction` override) — would leave `aria-orientation="vertical"` and Up/Down keys on a horizontal strip;
+  (c) a new horizontal nav component / drawer / select — a redesign, which the user excluded; (d) widening the
+  breakpoint above 640px — the vertical layout is still fine at 640-900px and phone-landscape is an acceptable edge.
+- **Consequences / revisit when:** the two section titles ("Desktop" / "Server") and the app-name/version footer are
+  **invisible on narrow screens** (the footer info is desktop-ish anyway). If someone needs them on a phone, add them
+  to the tab header rather than the strip. Revisit if the app ever gets a settings *page* (non-dialog) — the same
+  classes would then need a page-level container.
+
+## DEC-044 — Settings v2 narrow-screen nav: review of fa41da0 — 3 defects fixed, dead weight removed (s068)
+
+- **Trigger:** user challenged the s067 commit (`fa41da0`) — "modified code is no longer useful and can be better".
+  The challenge was **correct**: review found 3 real defects plus ~14 lines of avoidable code, all fixed in `71c73a0`
+  (pushed `origin/dev`, deployed :4447 pid 2999326, user-confirmed).
+- **Defect 1 — medium-width regression:** deleting the `@media (max-width:639px) { list: 144px }` rule left the
+  vertical nav at a fixed 240px for every viewport ≥640px while the key/value rows still stop wrapping at that same
+  640px (`@media (min-width: 640px) { flex-wrap: nowrap }`, unchanged by the commit). Result: a constant **−96px**
+  of usable row width from 640px to ~1011px (344→248 @640, 524→428 @820). **Fix:** app-scoped
+  `width: clamp(168px, 24vw, 240px); min-width: 0` on the vertical list — 168px @640, 197px @820, 240px ≥1012,
+  desktop unchanged. Lesson: when a responsive branch disappears, the *other* breakpoint that governs the same
+  component's internals (here row wrapping) must be re-checked at the same time.
+- **Defect 2 — selector matched nothing:** the strip icon-hiding rule used `[data-slot="icon-svg"]`, but `Icon`
+  renders `<div data-component="icon"><svg data-slot="icon-svg">…</svg></div>` — the box that consumes the space
+  is the wrapper div. The rule was inert, so every label kept an empty 20px icon slot (the user spotted it before
+  it was deployed to their phone). **Fix:** target `[data-component="icon"]`. Rule of thumb for this codebase: slot
+  selectors are for slot elements (`data-slot`), component selectors (`data-component="icon"`) for wrappers.
+- **Defect 3 — unsafe centring:** `justify-content: center` with `width: max-content` + `min-width: 100%` centres an
+  overflowing strip on **both** sides, clipping the first tab where it cannot be scrolled to (measured x = −7px @390,
+  −22px @360). **Fix:** `justify-content: safe center` (centred when it fits, start-aligned + scrollable when not;
+  degrades to the flex default if `safe` is unsupported).
+- **Dead weight removed:** (1) the hand-rolled `createSignal`+`onMount`+`matchMedia`+`onCleanup` viewport listener →
+  `createMediaQuery("(max-width: 639px)")` from `@solid-primitives/media`, the helper already used at **8 sites** in
+  `packages/app` — the commit was the only place that bypassed it; (2) 9 lines re-declaring `width/overflow-x/
+  scrollbar-width/-ms-overflow-style` + the `::-webkit-scrollbar` rule that `ui/tabs-v2.css:31-40` already provides
+  for the horizontal list (Kobalte puts `data-orientation` on the list, so it applies); (3) a dead
+  `border-inline-end: none`; (4) colour moved from the trigger to the wrapper to mirror the vertical variant's
+  structure in `tabs-v2.css:198-204`.
+- **Kept deliberately:** `overflow-x` on the strip (computed `overflow-x:auto` **and** `scrollbar-width:auto` in this
+  state, so no app rule was hiding the scrollbar — the ui rule's `scrollbar-width: none` must stay where it is);
+  `display: contents` on the nav groups (no other precedent in `packages/app`, but it is the only way to flatten
+  the section groups without duplicating markup); `packages/ui` **still untouched** — the adaptive width is an
+  app-level override at higher specificity (`.settings-v2[…][data-orientation="vertical"]`).
+- **Collisions checked:** `settings-v2-nav`/`-nav-group`/`-nav-footer` and `class="settings-v2"` are unique to this
+  dialog; `TabsV2` is mounted in exactly one place in the app, so the new CSS cannot leak. (Pre-existing caveat
+  recorded: `settings-v2.css:8/12/167/172` select `[data-component="dialog-v2"][data-variant="settings"]` without
+  the `.settings-v2` prefix, so they also match the manage-models and server dialogs.)
+- **Residual (not changed):** below 640px rows still stack the control under the label (now defensible with 368px of
+  inner width); the nav flips at 640px while `general.tsx`'s `mobile` signal is 767px (both pre-existing choices);
+  five tabs still overflow in very long locales even label-only — the strip scrolls and `safe center` keeps the first
+  tab reachable, with an edge-fade precedent at `titlebar-tab-strip.tsx:411-420` if ever needed.
+
+## DEC-045 — A folder is a project: record every resolved directory, list plain folders (s069, FE-020)
+
+**Context.** "opencode fork, project folder selector: after selected and dismiss dialog, the path seems not
+propagate return to outside." Reproduced live: Home ▸ Projects ▸ Add project + a folder without a git repo →
+the dialog closes and nothing changes. Git folders worked.
+
+**Why it happened.** A project is a **git identity**, not a path (`core/src/project.ts:109`): remote-url hash →
+id cached in `<git-common-dir>/opencode` → first root commit sha (confirmed on the live server: a prepared
+folder's project id *is* its commit sha). A directory with no repository resolves to `{id: "global",
+directory: "/"}`, and `Project.saveProjectDirectory` returned early for the global project — so a plain folder
+was recorded in no table at all. The Home list became server truth in s043, so there was nothing left to
+render and the picker's result disappeared silently. A `git init` does **not** fix it: a repo with no commits
+has no remote and no root commit, so it still resolves to `global` (measured), and the `initGit` call also
+*repoints the global project's own `worktree`* at the new folder.
+
+**Decision.** The list means **every folder that has been opened on the server**, and a folder does not have to
+be a repository:
+
+1. **Engine (additive).** `saveProjectDirectory` records every opened directory, global project included;
+   `fromDirectory` emits `project.directories.updated` on the global bus when a row is new. No schema change,
+   no SDK regen — `project_directory`, the `directories` endpoint and the client's refetch-on-that-event wiring
+   already existed (`server-sync.tsx:585-591`).
+   **The recorded value is the requested directory, not `ProjectV2.resolve`'s `directory`.** For a directory
+   without a repository that field is `"/"`, so recording it would collapse every plain folder into one `("/",
+   global)` row — the first implementation of this decision had exactly that bug, caught in review. A repository
+   still records its own worktree, so the rule is `data.vcs ? data.directory : directory`. Guarded by
+   `opencode/test/project/project.test.ts` ▸ *"should record a directory without a repository for the global
+   project"*, which fails against the resolved-value version.
+2. **App.** Those directories load as a **query** (`[scope, "project-folder"]`) and merge into the Home list
+   (`mergeProjectFolders`), deduplicated against project worktrees *and* sandboxes by `pathKey`. The `folder`
+   store slice is a *getter* over that query, like `path`/`provider`/`config`, instead of a value written once
+   inside `bootstrapGlobal` — otherwise nothing but a full reload ever refreshed it. `add` awaits a refetch of
+   that query after `project.current` resolves, rather than waiting for the event to travel back.
+   The merge feeds **every** server section (`forServer` too), not only the focused one: it used to return the
+   per-device store, which by construction knows nothing about another server's plain folders.
+3. **No `initGit`.** Home's `add` no longer initialises a repository: it resolves the project (which is what
+   makes the server record the directory). The composer path keeps its s033/FU-013 `initGit` for empty folders
+   (proven on-device), but a folder no longer *needs* it to be usable.
+4. **Picker contract.** Only an explicit selection resolves. No implicit fallback to the folder the tree happens
+   to be rooted at — that fallback is what handed `/` to the caller.
+
+**Alternatives rejected.**
+- *Mint a per-directory project id for non-repo folders* (`dir:<hash>`): the most principled fix, but it changes
+  the identity model — `global` is the CLI/TUI fallback for non-repo directories and `fromDirectory` re-points
+  `global` sessions to a new id — and it is a recurring merge-conflict surface in a fork that rebases onto
+  upstream regularly (s054 merged 59 commits). Not worth it for a list-completeness gap.
+- *Merge the per-browser `layout.projects` store into the Home list*: zero server work, but per-device — the
+  exact inconsistency s043 was closed to fix.
+- *Publish `project.directories.updated` from `ProjectDirectories.create` (core) with an `EventV2.node` dep*:
+  **do not retry** — `ReferenceError: Cannot access 'node' before initialization`, a module-init cycle. The
+  engine layer already has `EventV2Bridge` *and* `GlobalBus`, and `emitUpdated` is the global-bus emit the
+  client's global branch listens to.
+
+**Consequence to remember.** A folder without a repository is listed but has no project row: it has no id, so
+"Edit project" is hidden for it and it cannot be renamed/icon'd. When it later gets a commit it becomes a real
+project on the next resolution (the running server caches the identity per directory, so that needs a restart).
+
+## DEC-046 — The DEV dropdown reuses the project page's utility items, not new copies of them (s071)
+
+- **Decision:** the top-left **DEV** menu (`ChannelIndicator`, `packages/app/src/components/titlebar.tsx`) gains
+  **Log out / Settings / Help** after a separator, wired to the *same* handlers the project-selection page uses
+  (`HomeUtilityNav` → `confirm(sidebar.logoutConfirm)` + `/logout`, `useSettingsDialog()`,
+  `platform.openExternal("https://opencode.ai/desktop-feedback")`), and the labels come from the **existing**
+  i18n keys `sidebar.logout` / `sidebar.logoutConfirm` / `sidebar.settings` / `sidebar.help`.
+- **Rationale:**
+  - The user asked for "the 3 items that originally in project selection page". Duplicating the *behaviour* would
+    have created a second, subtly different logout/settings path (the class of bug s024/s045/s046 came from), so
+    the menu calls the same code the page does.
+  - Reusing the existing keys costs **zero new i18n keys** — they are already translated in all 62 locale files,
+    so this is also the only version of this change that does not widen the FU-076 parity debt.
+  - `useSettingsDialog()` rather than `useSettingsCommand()`: the `settings.open` command is already registered by
+    `home-projects-controller` and `pages/session`, and a third `command.register` would duplicate the entry in
+    the command palette. The hook is safe to call anywhere under `DialogProvider` (app.tsx:417), which includes
+    both titlebars.
+  - Item order mirrors the page, and a separator separates the dev-only actions from the user-facing ones.
+- **Alternatives rejected:**
+  - *New `devMenu.*` i18n keys* for the 3 items: more correct naming-wise, but it needs 62 locale edits for copy
+    that already exists, and it would let the DEV menu drift from the page's wording.
+  - *A shared `HomeUtilityNav`-style component for both surfaces*: the two hosts differ (a `DropdownMenu.Item` vs
+    a full-width nav button with icons), so the only shareable part is 3 tiny handlers — not worth a component.
+  - *Localizing the 4 dev-only items in the same change* (Home page / Refresh / Clear cache / Debug tools are
+    hardcoded English, so a zh user now sees a mixed menu): deferred to FU-083 to keep this diff to one file and
+    not to fabricate 62 translations in the same commit.
+- **Consequence to remember:** `sidebar.logout` / `sidebar.logoutConfirm` are still the English placeholder in
+  `zh.ts` and most locales (s012/s013, FU-026), so the new Log out item shows English inside a Chinese UI until
+  they are really translated (FU-084).
+
+## DEC-047 — "When did the model last speak?" is a client-side observation, not a server timestamp (s070, FE-021)
+
+- **Decision:** the "Thinking" row's elapsed number becomes a **pair** —
+  `· A / B` = *seconds since the last model output* / *seconds since the user prompt* — where **A is the max of
+  the server's own stamps and a client-observed arrival time**. The observation is implemented as
+  `latestTurnActivity()` (`packages/app/src/pages/session/timeline/turn-activity.ts`), which returns
+  `{ at, key }`: `at` = max(assistant `time.created`/`time.completed`, each part's last stamp —
+  `tool.state.time.end ?? start`, `text/reasoning.time.end ?? start`) and `key` = a fingerprint of the whole
+  turn that also changes when a part grows in place.
+- **Rationale:**
+  - The server **cannot** answer "when did the model last say something" from timestamps alone. It stamps a part
+    when the part is *created*, and a streaming `text`/`reasoning` part keeps its original `time.start` while
+    tokens keep arriving — so the pre-existing counter (base = last assistant message `time.created`) kept
+    counting up during a healthy stream. The `message.part.delta` event mutates `part.text` in the store
+    (`context/server-session.ts:1190`), so the client *can* see each update and stamp it with its arrival time.
+  - `at` is a **max**, never a replacement: if the store is hydrated by a fetch (or a buffered SSE batch lands
+    late), the server stamps still win, so the number can never claim the model spoke later than it really did.
+  - The two numbers answer different questions and both were asked for: A = "is it stuck?" (grows only while the
+    model is silent), B = "how long has my prompt been running?".
+  - The fingerprint is scoped to **one turn**, so updates in other sessions/turns cannot reset it, and the row
+    exists at most once (the active turn).
+- **Traps hit, recorded so they are not re-introduced:**
+  - **`on()` does not dedupe the single-dependency form.** `createEffect(on(() => activity().key, () =>
+    setObserved(Date.now()), { defer: true }))` looks right and is an **infinite reactive loop**: `setObserved`
+    invalidates `activity()`, which re-fires the effect, which stamps again. Solid only compares element-wise in
+    the *array* form (`node_modules/solid-js/dist/solid.js:457-475`). The shipped code compares the previous
+    fingerprint explicitly and skips the first run — which also covers what `defer` was meant to cover.
+  - **Do not gate the row on `A > 0`.** `A` is legitimately `0` while the model streams (that is the point), so a
+    `Show when={lastOutput() > 0}` gate makes the counter *flicker out* on every delta. It is gated on `B > 0`.
+  - `ToolStatePending` has **no** `time` field, so a pending `question` tool contributes no stamp and the row
+    falls back to the assistant message creation.
+  - `Intl.DateTimeFormat` for the tooltip clock follows the existing precedent (`session-ui/message-part.tsx:1221`,
+    `timeStyle: "short"`) rather than `toLocaleTimeString`.
+- **Alternatives rejected:**
+  - *Server-side `lastActivityAt` on the message/part*: the only version that is correct across devices and
+    reconnects, but it means a schema change, a protocol/SDK regeneration, and it still cannot timestamp
+    individual streamed tokens — the client would still need the observation for the streaming case.
+  - *Dropping A and showing only B*: loses the "is it stuck?" signal, which is the whole point of the row.
+  - *A new `formatDuration` helper shared with `message-part.tsx`*: the two live in different packages
+    (`app` vs `session-ui`) and the row's copy is identical to the existing one, so the duplication stays until
+    there is a third caller.
+- **Consequence to remember:** with the default `showReasoningSummaries: false` the row is the **live footer of
+  the whole busy turn** (`rows.ts:193`: the guard is `showReasoning ? noRenderableParts : true`), so the counters
+  sit under the streaming text. Turning reasoning summaries **on** hides the row at the first reasoning text —
+  pre-existing behaviour, deliberately left alone.

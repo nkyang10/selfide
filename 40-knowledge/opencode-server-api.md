@@ -89,3 +89,43 @@ Plugins do receive `client` and `serverUrl` and can define custom tools.
 
 **Takeaway:** the standard architecture = backend spawns/orchestrates `opencode serve`, exposes a
 single API surface + SSE bridge, browser is just a thin client.
+
+## Projects, directories and plain folders (verified on the fork, 2026-09-26)
+
+The single most counter-intuitive part of the server model, and the cause of FE-020. Verified by reading
+`packages/core/src/project.ts` + `packages/opencode/src/project/project.ts` **and** by measuring the live
+fork on :4447 (see `20-logs/sessions/2026-09-26_s069_fe-020-plain-folder-projects.md`).
+
+**A project is a git identity, not a folder path.** `ProjectV2.resolve(directory)`:
+`git.repo.discover(directory)` → no repo ⇒ `{id: "global", directory: <fs root>, vcs: undefined}`; repo found ⇒
+`id = hash(remote url)` → else the id cached in `<git-common-dir>/opencode` → else **the first root commit
+sha**. Measured: a prepared folder's project id was literally its commit sha. So:
+
+| directory | server record |
+|---|---|
+| a git repo (any depth) | its own row in `project`; a subdirectory becomes a `sandboxes` entry + a `project_directory` row |
+| **no repo** (and a repo with no commits) | collapses into the **one** shared `global` row, whose `worktree` is a placeholder (`/`, or the last directory resolved) |
+| anything | every opened directory is recorded in `project_directory` (`project_id`, `directory`, `time_created`) — since FE-020/DEC-045 this includes the global project, so a plain folder is still remembered |
+
+**The recorded `project_directory.directory` is the directory that was *asked for*, not `ProjectV2.resolve`'s
+`directory` field.** For a directory without a repository that field is the filesystem root, so recording it
+would collapse every plain folder into a single `("/", global)` row. A repository records its own worktree
+(its subdirectories are the `sandboxes` entries). Rule in `fromDirectory`: `data.vcs ? data.directory :
+directory`. Guarded by a test in `packages/opencode/test/project/project.test.ts`.
+
+**Consequences to design around:**
+- `GET /project` lists **project identities**, so a folder without a repository has no row and cannot appear
+  there. `GET /project/{projectID}/directories` lists the directories of one project — for `global` those are
+  exactly the plain working folders, newest first (`desc(time_created), asc(directory)`). That pair is what the
+  app's project list is built from.
+- `POST /project/git/init?directory=X` (`git init`) does **not** give a folder an identity: no remote and no
+  root commit ⇒ still `global`. Worse, on a non-repo directory it **repoints the global project's own
+  `worktree`** at that folder.
+- The running server caches the resolved identity per directory (`InstanceState`), so a change that would alter
+  the id (e.g. the folder's first commit) only lands on a fresh resolution — a restart, not a refetch.
+- A directory reaching the server is what records it: any workspace-routed call with
+  `?directory=X` (e.g. `/project/current`) opens the instance and runs `fromDirectory`.
+- Events: `project.updated` (per project row) and `project.directories.updated` (a new directory row) are both
+  emitted on the **global** stream (`directory: "global"`), which is the branch clients refetch on.
+- Sessions in a non-repo directory belong to the `global` project; `fromDirectory` re-points them if the
+  directory later gets its own id.

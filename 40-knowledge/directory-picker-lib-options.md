@@ -33,3 +33,19 @@ asked for a "better, all-in-one library" + keep text-path input + allow mid-leve
 ## Build note
 - Build must use pinned **bun 1.3.14** (scripts/build-linux.sh). bun 1.4.x produces a broken graph
   (see `notes/build-runtime.md` from s023).
+
+## Picker contract after FE-020 (s069, DEC-045)
+
+The dialog is the same Zag.js TreeView, but three behaviours were wrong and are now fixed (code complete,
+not yet built — FU-079):
+
+- **Confirm returns only an explicit selection.** Directory-mode `policy.result()` used to fall back to the
+  folder the tree was rooted at, so confirming straight after opening handed the caller the filesystem root
+  (`/`), which then got added as a project. The action button now stays disabled until a folder is chosen
+  (row click, or a typed path + Enter, or a suggestion click).
+- **The path text box shows the absolute path.** `handleTreeSelect` passed the tree-*relative* value, so the
+  row at `/home/mark/Desktop` displayed `home/mark/Desktop`.
+- **Suggestions follow typing only.** A separate `searchInput` signal drives the suggestion resource; tree
+  clicks / navigation only move the displayed path. Before, every row click re-ran the search for the
+  selected path from `/` (a root-wide `find/file` call). A suggestion click for a directory also re-selects
+  the folder it navigated to, so it is confirmable.
