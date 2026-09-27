@@ -51,7 +51,26 @@ fingerprint of the turn's parts (`part.text.length` included) compared against t
 using `on(…, { defer: true })` was an **infinite reactive loop** and was replaced (DEC-047 has the full trap list).
 Rendering reuses the already-translated `ui.message.duration.seconds` / `.minutesSeconds`; the row is gated on
 `B > 0` because `A` is legitimately `0` while the model streams. See `## FE-021` + DEC-047.
-**Deployed (latest) s069-fix: `1.1.20260927072837` (pid 3654762)** — FE-020 **including the live-found fix
+**FE-022 (s073, DEC-051 — SHIPPED + LIVE-VERIFIED: `3f72392` + `a325324` + `d04b79e` on `origin/dev`, deployed as `1.1.20260927123522`, pid 3851578, built from a clean worktree per DEC-052):** the turn-progress
+row is now driven by *"is this turn unfinished?"* instead of *"did the server say `busy`?"*, and it names the stage.
+New `packages/app/src/utils/turn-progress.ts` — a per-(server scope, session) **client-side record** of a submitted
+turn, `begin` on submit (before any `await`), `settle` on the server's first status event, on every rollback, and by
+the status watchdog for sessions the server does not list as running. The row renders on `status !== "idle" || pending`
+(**`retry` included**) and the 15 s watchdog no longer demotes a `retry` to `idle` — during a retry backoff the session
+is absent from `/session/status`, so the old reconcile blanked a **live** turn (reproduced live at 15.1 s on retry
+attempt 4). Labels: `Sending` (submitted, server silent) → `Thinking` → `Waiting for the model` (>=10 s with zero model
+output; a long tool call cannot trip it). 2 new i18n keys in `packages/ui/src/i18n` `en.ts` + all 61 locales (English
+source copy). Gates: `bun turbo typecheck` **30/30**, app unit **773 pass / 0 fail**, ui unit 27/27, i18n parity green,
+oxlint **0 errors**, e2e `post-submit-progress.spec.ts` **3/3** (each case verified to FAIL without the fix), timeline
+stability **43/44** (the 1 failure, `adverse.spec.ts` "shell state across virtualization", is **pre-existing** — verified
+identical with the change stashed). Follow-on found by the live verification: the watchdog's "absent ⇒ idle" rule also fires while the
+store holds `busy` *inside* a retry cycle, so it now asks the server for the session's messages
+(`turnIsFinished`) before revoking a live turn's row — that is the missed idle event the watchdog exists
+to recover from, so asking for it is the honest check. Verified live 7/7 on a 390px viewport with a
+**fresh profile**: progress row on screen 35 ms after Enter, "Sending" → "Thinking", never blank, real
+answer. See `## FE-022` + DEC-051 + DEC-052.
+**Deployed (latest) s073 all-enhancements: `1.1.20260927153151` (pid 3944553)** — FE-022 (turn progress) + FE-023 (Admin / `webui.autoStart`) + FE-025 (timeline diff summary) in one binary, built from the whole working tree (the parallel session's 85 files ship **uncommitted** — see DEC-052 for the reproducible-build recipe). Verified 9/10 live; the default model is now `dgx/general` ("LLM Main", set in `~/.config/opencode/opencode.jsonc`, which the server reads only at startup).
+**Previous** s069-fix: `1.1.20260927072837` (pid 3654762)** — FE-020 **including the live-found fix
 `cb67c4a`** (record on *open* not on *resolve*; the app calls `GET /project/{projectID}/directories` itself),
 Playwright-verified 18/18. Previous: s071 `1.1.20260927065342` (pid 3613950) — **FE-020** (`c1f1b58`) **plus** the **DEV-menu utility
 items** (DEC-046: the top-left DEV dropdown also offers Log out / Settings / Help, reusing the project page's
@@ -78,6 +97,18 @@ Previous: s027 (0.0.0-dev-202609130611) fixed the compact-summary-seeds-into-new
 deployed** (FU-033/FU-034 — plan a single rebuild+deploy).
 Web UI on http://192.168.1.249:4447/ (cwd `p003-opencode-fork`).
 **Source:** `opencode/` — vendored clone (git-ignored as a nested repo; never commit it to the ide repo).
+
+**FE-023 (s076 — CODE COMPLETE, not built/deployed) admin settings + FE-024 exe web auto-start.** A new
+**Admin** section in the settings-v2 dialog whose rows read/write the **server-global
+`opencode.json`/`opencode.jsonc`** (first rows: *webui server → auto start on/off*, *webui server → webui port*,
+default 4446), and the `opencode.exe` starting that web server on the configured port, reachable from any
+domain when a server password is set. Built on the existing `PATCH /global/config` write path (comment-
+preserving) plus one new read-only route `GET /global/webui` (configured vs running port, `restartRequired`) —
+no new auth, because this server has one shared credential and no roles. Gates: turbo typecheck 30/30, app unit
+774/774 (i18n parity 5/5 across 62 locales), auto-start policy 9/9, `global.webui` httpapi scenario PASS, oxlint
+0 errors. **Not in any binary yet** — the web UI is embedded at build time, so it needs
+`scripts/deploy-web-4447.sh --detach` (which restates the listener this page is served by) + a live check
+(ide FU-093). Plan, evidence and phases: `notes/plan-admin-settings.md` (ide FU-089…FU-094).
 
 ## Mission
 
@@ -413,3 +444,24 @@ browsing bug had created deleted.
 - Follow-ups: FU-018 (first modification) ✅ done via FE-001; FU-020 (user verify on iOS + iterate);
   FU-033/FU-034 (FE-008 + FE-009 deploy, single rebuild)
 - Runtime notes: `notes/build-runtime.md`
+
+## FE-022 — Turn progress is always on screen and says what it is doing (SHIPPED + LIVE-VERIFIED — s073, DEC-051)
+
+The user reported the agent chat showing nothing after submitting a prompt until the first model response, and not
+being able to tell a slow start from a dropped connection. Measured on the live :4447 with Playwright (SSE tee +
+`MutationObserver` on `[data-slot="session-turn-thinking"]`, probes in `/tmp/opencode/probe/`): with a healthy model the
+row already appeared **28 ms** after Enter, so the happy path was not the bug. The real holes were
+
+1. **any non-`busy` status removed the row** — including `retry`, i.e. an upstream failure/backoff looked like a dead
+   socket;
+2. **the 15 s status watchdog demoted a live turn** — "store says busy but the server does not list the session ⇒
+   idle" is wrong during a retry backoff, when the session is legitimately absent from `/session/status` (reproduced
+   live: the row vanished at 15.1 s while the server was on retry attempt 4);
+3. **the optimistic `busy` status is skipped entirely for sandbox-worktree sessions** (`optimisticBusy`), and it is
+   only as fresh as the last status event, so nothing covered "submitted, not yet acknowledged".
+
+The fix is DEC-051: a client-side record of the submission (`utils/turn-progress.ts`) plus `status !== "idle" || pending`
+as the row gate, plus stage labels (`Sending` → `Thinking` → `Waiting for the model`). Side finding, **not** fixed here:
+this box's server default model is `opencode-go/gpt-5.6-luna`, which answers *"An active OpenCode Go subscription is
+required to use Go models"* — on a fresh browser profile every prompt enters the retry loop, which looks exactly like a
+broken connection (ide FU-096).
