@@ -318,3 +318,25 @@ Kept `/tmp/opencode` and `/home/mark/圖片` — real folders that are genuinely
 
 Commits: `c1f1b58` (the feature) and `cb67c4a` (this fix), both on `origin/dev`. A parallel process added
 `5d6b47a` and `96f8e79` in between; the push was a clean fast-forward.
+
+---
+
+## Fifth pass: git source of truth (2026-09-27)
+
+The user asked to compare local vs remote and then make GitHub the only source. Findings and actions:
+
+- **Fork repo**: clean, `0 0` vs `origin/dev`, nothing to commit — `c1f1b58` + `cb67c4a` were already on
+  `nkyang10/opencode` (confirmed through the public GitHub API, not just local refs).
+- **Control folder**: one uncommitted file (the command-log rows s070 had appended) → committed as
+  `7877e9af9`; and **17 commits (s012 → s071) existed only on this machine**, because its `origin` was the LAN
+  Gitea at `http://192.168.1.162:3300/mark/selfide.git` and no credential for it existed here. The Gitea copy was
+  two weeks stale (`5c847a6f9`, 2026-09-12) — the "never keep knowledge only on one device" rule had been quietly
+  broken for a fortnight.
+- The GitHub mirror `nkyang10/selfide` was **ahead** (`92651df82`) and an ancestor of local `HEAD`, so the push
+  was a clean fast-forward; the Gitea remote was then removed and the mirror renamed to `origin`, with `main`
+  tracking `origin/main`. Recorded as DEC-048, plus the `docs/agent-workspace.md` convention (the Gitea rule still
+  applies to the *other* repos, e.g. `mark/cloud-pos-system`).
+- **"Remove the local git" was not executed** (see the command log for the reasoning); the user's answer was
+  **keep it**. Both `.git` directories stay: GitHub is the only *source* regardless, a parallel session
+  (s070/s071) is still committing to this folder, and the local clone is what lets an agent detect drift with
+  `git status`/`git diff`.
