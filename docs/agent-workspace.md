@@ -19,7 +19,14 @@
 
 ## Conventions for a growing multi-device agent team
 
-- **Gitea is the origin**: clone from `http://192.168.1.162:3300/mark/selfide` + `mark/cloud-pos-system`; push to Gitea (`gitea` remote set). Never keep knowledge only on one device.
+- **GitHub is the only origin** (changed 2026-09-27): this folder's `origin` is now
+  `https://github.com/nkyang10/selfide.git` and the LAN Gitea remote was **removed**, so `git push` needs no
+  extra arguments. The 17 commits that had never left this machine (s012 → s071, through `7877e9af9`) went to
+  GitHub as a fast-forward — the Gitea copy was two weeks behind (`5c847a6f9`, 2026-09-12) and had nothing the
+  GitHub copy lacked. The credential is a GitHub fine-grained PAT in `~/.git-credentials` (mode 600, **outside**
+  this folder); it also reached the LAN Gitea, which is why the mirror is a safe target. For the *other* repos the
+  Gitea convention still applies (`mark/cloud-pos-system`): clone from `http://192.168.1.162:3300/…`, token in
+  `~/.gitea-engine-token`. Never keep knowledge only on one device.
 - **Named identities**: each agent commits with its own `user.name`/`user.email` so the log attributes work.
 - **Per-agent tokens** preferred; a shared git token never goes into files.
 - **Before acting**: fetch latest → read status (pinned issue + `10-status/`) → read follow-ups → claim/comment before big work, so two agents don't collide.

@@ -1083,3 +1083,27 @@ project on the next resolution (the running server caches the identity per direc
   the whole busy turn** (`rows.ts:193`: the guard is `showReasoning ? noRenderableParts : true`), so the counters
   sit under the streaming text. Turning reasoning summaries **on** hides the row at the first reasoning text —
   pre-existing behaviour, deliberately left alone.
+
+## DEC-048 — GitHub is the only origin for this control folder (2026-09-27)
+
+**Context.** The control folder's `origin` was the LAN Gitea (`http://192.168.1.162:3300/mark/selfide.git`),
+which had **no usable credential** on this machine — only a github.com entry existed in `~/.git-credentials`.
+Result: 17 commits (s012 → s071) sat local-only for two weeks while `origin/main` stayed at `5c847a6f9`
+(2026-09-12), i.e. the "never keep knowledge only on one device" rule was quietly broken. The GitHub mirror
+`nkyang10/selfide` existed and was *ahead* (`92651df82`).
+
+**Decision.** GitHub is the single origin. `main` was pushed to the mirror as a fast-forward (its tip was an
+ancestor of local `HEAD`, so nothing was rewritten), then the Gitea remote was **removed** and the mirror renamed
+to `origin`; `main` tracks `origin/main`. The user's intent: "github.com is the only source".
+
+**Alternatives rejected.** *Keep Gitea as a second remote*: two origins for one branch is how the 2-week drift
+happened in the first place, and it cannot be written to from here anyway. *Force-push*: unnecessary — the
+histories had not diverged.
+
+**Consequences.**
+- The fork clone (`50-projects/p003-opencode-fork/opencode`) is unaffected: its remotes were already both on
+  github.com (`origin` = `nkyang10/opencode`, `upstream` = `anomalyco/opencode`, the read-only reference the fork
+  rebases onto).
+- A credential now lives in `~/.git-credentials` (github.com, mode 600). Per the no-secrets rule it stays outside
+  this folder; note that the :4447 server binary logs permission-evaluation lines, so a token passed on a command
+  line can be captured in `opencode/logs/**` (git-ignored) — rotate any token that appears in a transcript.
