@@ -301,3 +301,35 @@ the FU-026 pattern, translated in zh/zht.
 **Closed: FU-083, FU-084, FU-098, FU-101.** Nothing from the review is left open. The live binary is still
 `1.1.20260927153151`; this work is committed and pushed (`75e5c77`) but **not deployed** — deploying kills
 the :4447 listener this session runs in, so that is the user's call.
+
+## Deployed: `1.1.20260928023322`, pid 90290 — and the Chinese UI verified live
+
+Built from a **detached worktree at `origin/dev` = `75e5c77`** (DEC-052, so no uncommitted work rode
+along), pinned bun 1.3.14, `bun install` skipped, swapped with `cp` → `mv -f` because `cp` onto a running
+executable is ETXTBSY, old listener (pid 58516) stopped, worktree removed afterwards. The binary carries
+**both** the user's session-ordering fix (`session_time_updated_id_idx`) and this session's fix-all commit
+(`could not start the web UI on port`).
+
+**Verified on the live server, in Chinese** — the check this commit actually exists for:
+
+```
+DEV menu   ["主页","刷新","清除缓存","调试工具","退出登录","设置","帮助"]   7/7 localised
+categories [通用, 快捷键, 服务器, 提供者, 模型, 管理]
+Admin      fully localised, still reporting the live port 4447
+stages     发送中 → 思考中   with  · 1 秒 / 1 秒  counters
+model      dgx/general (LLM Main)
+```
+
+Those four DEV items had **no i18n key at all** before this work, so this is the first time that menu can
+be localised in any language.
+
+**One check failed and I chased it instead of waving it off.** "bundle carries the zh translations" was a
+**false negative in my own probe**: it grepped only the entry chunk, but that chunk holds the **English**
+dictionaries plus `labelKey`/`confirmKey` references — the locale is `import()`-ed lazily
+(`language.tsx:53`), so the zh values are not in it. I confirmed the copy really ships two other ways: the
+zh strings are inside the embedded binary (`grep 自动启动 Web UI` → 1 hit), and the browser renders them.
+A separate behavioural probe re-checked the stage labels without any bundle grep, so the verification does
+not rest on a bundler detail at all.
+
+`等待模型回应` did not appear in that run because the stage requires ≥10 s of total silence and the turn
+answered sooner — expected, not a defect.
