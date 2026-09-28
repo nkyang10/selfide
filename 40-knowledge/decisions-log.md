@@ -1430,3 +1430,33 @@ so back up the DB first (s078: `/tmp/opencode/db-backup-before-s078.db`, 896 MB,
 indistinguishable and all 5 new cases passed against the *old* code. A test for "these two orderings differ" must
 make them differ in the fixture. Verified by `sed`-ing the sort column back and confirming 3 of 5 (plus the route
 case) go red.
+
+### DEC-054 — the provider `User-Agent` carries the **upstream** version, not the fork's (2026-09-28, s079)
+
+- **Decision:** the fork keeps DEC-042's displayed version (`1.<counter>.<deploy-ts>`, so `1.1.20260928065214`
+  in Settings, `/api/health`, the desktop About box), but the version it puts on the wire in
+  `User-Agent: opencode/<version>` is a separate constant, `UPSTREAM_VERSION = "1.18.31"` in
+  `packages/script/src/index.ts`, stamped as `OPENCODE_UPSTREAM_VERSION` by all three build scripts and read at
+  runtime as `UpstreamVersion` (`packages/core/src/installation/version.ts`).
+- **Rationale:** OpenCode's Zen free tier gates on the declared client version and answers **HTTP 426**
+  `Error from provider (Console): OpenCode 1.18.0 or newer is required to use the free tier`. DEC-042's grammar
+  reads as `1.1.x` — older than 1.18.0 under any numeric comparison — so the fork locked itself out of every
+  free model. Measured, not assumed: same account, same model, minutes apart, only the UA differing → old binary
+  426, new binary `FREE-OK`. The gate is upstream's and is reported three times
+  (`anomalyco/opencode#49944`, `#50451`, `#50581`).
+- **Alternatives rejected:**
+  - **Put the upstream minor in the displayed number** (`1.18.<deploy-ts>`, one notion of "version"). My
+    recommendation; the user chose the smaller change. It would supersede DEC-042 across three `package.json`s,
+    `app.getVersion()` and the updater, and it would have needed the fork counter to move into semver build
+    metadata — which the app's own `compareVersions` ignores, so the deploy toast would stop firing.
+  - **One-off build with `OPENCODE_VERSION=1.18.31`.** No code, but the next ordinary deploy reverts it.
+  - **Change DEC-042's counter to ≥ 18.** Semantically wrong: the middle slot stops being the fork counter.
+- **Consequences to remember:** (1) the fork now has **two** version notions, so `UPSTREAM_VERSION` must be
+  bumped whenever upstream is merged (FU-104) — a stale value is silently accepted by the gate until upstream
+  moves past it, which is the safe direction; (2) `packages/core/src/models-dev.ts:23` still sends the fork
+  version to `models.opencode.ai` — deliberately, no gate in evidence there; (3) `OPENCODE_UPSTREAM_VERSION` in
+  the environment overrides the constant for a one-off build, because `build-linux.sh` only overrides
+  `OPENCODE_VERSION`/`OPENCODE_CHANNEL`.
+- **Generalisable lesson:** **a user-facing version is also a wire value.** Any hosted service that reads it
+  (a gate, a feature flag, a rollout) compares it in the *upstream* numbering space, and a fork that invents a
+  new grammar is comparing apples with oranges. When a fork renumbers itself, ask what else reads that string.
