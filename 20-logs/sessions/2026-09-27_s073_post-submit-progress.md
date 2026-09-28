@@ -263,3 +263,41 @@ the bundle, never that their UI works:
   Its *live* rendering in a real session is still unobserved, because **no session in the `ide` project has
   changed files** (the parallel session's edits were in the fork checkout, a different project) — the spec
   is the honest instrument there.
+
+## "Fix all" — the user's own fix reviewed, then everything closed
+
+**Reviewed `86c621c` (the user's): necessary and correct.** The commit's own comment made a claim I
+checked rather than trusted — "the v1 route already sorts this way" — and it holds:
+`packages/server/src/handlers/session.ts:33` calls the *same* `SessionV2.list` and anchors both cursors on
+`time.updated` (lines 47, 58), while `list` was ordering by `time_created`. So the client was paging a
+list sorted by a different column than its own cursor: pages could skip or repeat sessions. The fix also
+matches the index it adds (`(time_updated, id)` for the new order + keyset anchor), the migration is wired
+into `schema.gen.ts`, `time_updated` really is bumped per message (SSE `session.updated`), and the tests
+pass: core session-list **5/5**, httpapi-session **22/22**.
+
+**FU-101 fixed** (`75e5c77`): a failed autostart reported `reason: "disabled"` — indistinguishable from
+"the admin setting is off" — and the TUI only prints when `started`, so a port clash left **no trace in
+the UI**. Now `AutoStartResult` carries `{ started: false, reason: "failed", port, hostname }`, the
+worker's catch no longer mislabels a failure, and the TUI prints a danger line naming the port it could not
+bind. My first attempt reached for a `TEXT_ERROR_BOLD` style that does not exist in `cli/ui.ts`; listing the
+real names caught it before the gates (`TEXT_DANGER_BOLD`). 10/10 tests.
+
+**Translation debt cleared where it is actually seen.** My earlier detection ("zh value identical to en")
+*undercounted* — a zh value can be English and still differ from en. Flagging every value with no CJK at all
+found **161 English values in `zh`**, of which **50 are real UI copy** (the rest are product names, tool
+names, keyboard legends, acronyms and example placeholders, which must stay English); `zht` had 54. And
+the two files are **not variants of one language**: `zh` is Mainland (会话 · 端口 · 缓存 · 刷新) while `zht`
+is Taiwan (工作階段 · 連接埠 · 快取 · 重新整理), so a character conversion would have produced wrong copy in
+one of them. Every term came from what each file already used — `mcp.status.disabled` (已禁用 / 已停用),
+`common.save` (保存 / 儲存), `home.title` (主页 / 首頁), `desktop.wsl.error.failedPort` (端口 / 連接埠),
+`toast.serverUpdate.refresh` (刷新 / 重新整理). Both files now report **0 untranslated UI strings**, verified
+by re-running the detector, and every `{{placeholder}}` was checked to survive unchanged.
+
+**FU-083 fixed, and it was the root of the others:** the DEV menu's four items were hardcoded English in
+`titlebar.tsx:669,672,697,700` with **no key at all**, so they could not be translated even in principle.
+They now use `devMenu.{home,refresh,clearCache,debug}` — English source copy in the other 58 locales per
+the FU-026 pattern, translated in zh/zht.
+
+**Closed: FU-083, FU-084, FU-098, FU-101.** Nothing from the review is left open. The live binary is still
+`1.1.20260927153151`; this work is committed and pushed (`75e5c77`) but **not deployed** — deploying kills
+the :4447 listener this session runs in, so that is the user's call.
