@@ -778,3 +778,36 @@ A web-interface wrapper around **opencode** (`opencode serve`, HTTP REST + SSE o
   `1.0.20260924-02-20260924022655000026ce5b19` (new unique format); server restarted from prior build so the
   refreshed toast logic is live. Health 401 (auth-gated). Remaining: user visual confirm of the toast on a
   signed-in tab during the next redeploy (FU-s065).
+
+## s078 addendum (Home Sessions list loses the most recently used session, 2026-09-28)
+
+- **Symptom (user-reported):** *"previous session in session list become New session with not correct last user
+  prompt"*. Reproduced live: the session the user was in, `ses_f1e1105d8ffemIqA1fu6wNrXE7` ("Show agent progress
+  after user prompt"), was **absent from the Home ▸ Sessions list**, and the row below the current one was an
+  unrelated untitled session (`New session - 2026-09-27T16:55:02.928Z`, 0 messages). The pasted URL also carried a
+  stray trailing `all` on the session id — a paste artefact, not a bug.
+- **Root cause — server, not the list.** The list fetches a bounded page (`GET /api/session?limit=15&order=desc`,
+  page limit 15) and sorts it by `time.updated` client-side, but `V2Session.list` ordered by
+  `SessionTable.time_created` and `/api/session` anchored its cursors on `time.created`
+  (`packages/core/src/session.ts:271`, `packages/server/src/handlers/session.ts:50,58`). A session started 17 h
+  earlier and still in use fell outside page 1. Proven in the live DB: `ORDER BY time_updated DESC` puts it 2nd,
+  `ORDER BY time_created DESC` puts it outside the top 15 — exactly the two rows that were missing.
+  `home-session-index.ts:172-176` had already predicted this; FE-016 (s058) shipped the bounded page anyway.
+- **Fix (DEC-053), commit `86c621c` pushed to `origin/dev`:** sort + cursor anchor on `time_updated`; new index
+  `session(time_updated, id)`; migration `20260928004444_useful_manta` (one `CREATE INDEX`, no rewrite). The old
+  plan was a full scan + temp B-tree, so the index is a speed-up, not a trade — `EXPLAIN` now reports
+  `SCAN session USING INDEX session_time_updated_id_idx`. Also fixes the per-directory fetch
+  (`directory-sync.ts:160`) and search, which used the same route.
+- **Tests:** 5 new core cases (`packages/core/test/session-list.test.ts`) + 1 route-level case in
+  `httpapi-session.test.ts` that asserts the **decoded** cursor, so the sort column and the cursor anchor (two
+  packages, no type link) cannot drift apart again. Verified non-vacuous by reverting the sort column: 3 of 5 core
+  cases and the route case go red.
+- **Gates:** `bun turbo typecheck` **30/30**; core **1088/0 new** (1083→1088 pass, the same 16 environmental
+  failures on a stashed tree); opencode `test/server` **298** (297→298, same 2 failures stashed); app unit
+  **780/0**; oxlint 0 errors; prettier clean; `bun run migration --check` "nothing to migrate".
+- **Deployed :4447:** build **`1.1.20260928011449`**, **pid 58516**, health `{"healthy":true}`. DB backed up first to
+  `/tmp/opencode/db-backup-before-s078.db` (the migration touches live data). Verified in the real UI (390×844,
+  real login): the previous session is **row 1** again with its real title and a real last-prompt line
+  ("fix all"), and "Set opencode default port to 4447" is back at row 9. 12 → 13 rows.
+- **Not fixed, deliberately:** a `limit=15` page still renders as 12–13 rows because child/archived sessions are
+  dropped client-side after the fetch → **FU-102**.

@@ -1386,3 +1386,47 @@ any deploy on a shared checkout: **a build is a snapshot of the tree, so on a sh
 snapshot of somebody's unfinished work.** Side lesson: `bun turbo typecheck` went red mid-session from
 the *other* session's WIP, which forced a `--no-verify` push; the gate is only meaningful for the files
 you touched, so on a shared checkout the per-package gate plus a stated reason is the honest minimum.
+
+## DEC-053 — the v2 session list's sort column is `time_updated`, and the index must match it (2026-09-28, s078)
+
+**Decision.** `V2Session.list` sorts and keyset-anchors on `SessionTable.time_updated`, `/api/session` builds both
+cursors from `first/last.time.updated`, and `session` carries `index("session_time_updated_id_idx")` on
+`(time_updated, id)`. Committed `86c621c`, deployed :4447 as `1.1.20260928011449`.
+
+**Why.** The Home Sessions list fetches a **bounded** page (`limit=15`) and then sorts that page by `time.updated`
+client-side. That combination only works if the server's page *membership* is chosen by the same key. It was not:
+`sortColumn` was `time_created`, so a session started 17 h earlier and still being worked on fell outside the first
+page entirely — invisible in the list, and replaced in the user's view by an unrelated untitled
+`New session - <timestamp>` row (with no last-prompt line, because those rows have 0 messages). That is the whole of
+"the previous session became New session with not correct last user prompt"; there was no title or prompt bug.
+
+**The rule worth keeping: a page is only correct if the server's page-selection key is the same key the client
+sorts and displays by.** The client was already right; the *set* of rows it was handed was wrong. Whenever a list
+becomes paginated, re-check the server's `ORDER BY` against the column the UI orders on — the failure mode is
+invisible, because the visible order is always correct and only *which* rows appear is wrong.
+
+Three independent signals said updated-time was the intended contract, so this is a bug against a known design, not
+a preference:
+- v1 `GET /session` is documented *"sorted by most recently updated"* and orders that way.
+- `packages/app/src/context/global-sync/child-store.ts:335` — *"use client.v2.project.list and root-filtered,
+  **updated-time v2.session.list**"*.
+- `home-session-index.ts:172-176` — *"the current V2 API orders by creation time … A bounded page could omit an old
+  session updated today."* **That comment predicted this exact bug.** FE-016 (s058) then shipped the bounded page
+  anyway, so the warning was correct and the code did not listen. **A TODO that names a failure mode is a spec;
+  re-read it before the change it blocks lands.**
+
+**Two things that had to move together.** The sort column and the cursor anchor live in two different packages
+(`core` and `server`) and neither references the other, so no type system couples them — changing one alone
+silently breaks paging (repeats/gaps). The route-level test asserts the *decoded* cursor, which is what keeps them
+honest. That is the only reason the test is worth its runtime.
+
+**Index, and why it is not a trade.** There was no index on `time_created` either: the old plan was
+`SCAN session` + `USE TEMP B-TREE FOR ORDER BY`, i.e. a full scan. After: `SCAN session USING INDEX
+session_time_updated_id_idx`. Migration is a single `CREATE INDEX` (no table rewrite) — but it does touch live data,
+so back up the DB first (s078: `/tmp/opencode/db-backup-before-s078.db`, 896 MB, 109 sessions).
+
+**Testing lesson (mine, worth repeating).** The first version of the fixture was **vacuous**: it stamped
+`time_created` and `time_updated` to the same value everywhere, so created-order and updated-order were
+indistinguishable and all 5 new cases passed against the *old* code. A test for "these two orderings differ" must
+make them differ in the fixture. Verified by `sed`-ing the sort column back and confirming 3 of 5 (plus the route
+case) go red.
