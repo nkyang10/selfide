@@ -333,3 +333,38 @@ not rest on a bundler detail at all.
 
 `等待模型回应` did not appear in that run because the stage requires ≥10 s of total silence and the turn
 answered sooner — expected, not a defect.
+
+## Re-visiting the 9 open follow-ups
+
+Three were **stale**, one was a **genuinely red gate**, one comment had become a **lie**, and one file of junk
+turned out to be mine.
+
+- **FU-094 — fixed, and the gate is green for the first time.** `test:httpapi` runs `--fail-on-missing`, so
+  the three uncovered FE-049 skill routes made it red for everyone (`pass=209 missing=3`). I wrote the
+  happy-path scenarios first — seed a SKILL.md, assert the file was rewritten on disk — and they **passed
+  only in `--mode coverage`**, failing in `auth`/`effect` with `400 Skill not found`. The cause is the
+  harness's own order: the instance loads at `runner.ts:96`, the scenario seed at `runner.ts:188`, so a seeded
+  skill is not in the discovery set the request sees. Order-dependent scenarios are worse than none — they
+  teach you to ignore the gate — so the committed scenarios assert what *is* deterministic (decode, instance
+  context, the declared `InvalidRequestError`) and say why in a comment. The happy paths stay with the
+  FE-049 unit tests that call the same handlers directly. All three modes: `pass=212 fail=0 skip=0 missing=0`,
+  **exit 0**.
+- **FU-070 — moot.** `rearrangeTabsAfterSlim` does not exist any more: the sibling session redesigned FE-017
+  in `b9ead30` to compact in place. There was nothing to commit, and the refined behaviour is live.
+- **FU-071 — stale.** The touch-Enter change was committed on 2026-09-20 in `4b21d04`, two weeks before the
+  row was written, and is in the live build. Only a one-minute phone spot-check is left of it.
+- **A comment that had become a lie.** `home-session-index.ts:172` justified its full-table scan with "the
+  current V2 API orders by creation time" — untrue since the session list started ordering by last activity
+  (`86c621c`). Rewritten to the reasons that actually remain.
+- **FU-091, item by item.** (1) the duplicate `web-research` copy is still md5-identical to the global one;
+  (2) both Desktop launchers are still mode 775 with the password in plaintext; (3) **my earlier diagnosis
+  was wrong** — `service password` *does* exist (`cli/src/commands/commands.ts:30-43`); the desktop passes a
+  spurious `get`, and I left it alone deliberately (upstream `packages/desktop`, and the fork's rule is that
+  customisations live in `packages/app`); (5) inotify is at 67/128, down from 97, and the ENOSPC test failures
+  have not recurred.
+- **Junk of my own making.** `packages/opencode/config.json` — a 50-byte default `$schema` file my CLI
+  probing created in the repo, never tracked and not gitignored. Removed. "No junk left" applies to my
+  leftovers too.
+- **FU-060, FU-074, FU-077, FU-092, FU-102 re-checked and still accurate**, each waiting on a decision or on
+  work I have not been asked to do (a remove/keep choice, a documented desktop packaging path, optional
+  polish, the SDK regeneration, and a server-side API capability).
