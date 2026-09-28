@@ -1460,3 +1460,44 @@ case) go red.
 - **Generalisable lesson:** **a user-facing version is also a wire value.** Any hosted service that reads it
   (a gate, a feature flag, a rollout) compares it in the *upstream* numbering space, and a fork that invents a
   new grammar is comparing apples with oranges. When a fork renumbers itself, ask what else reads that string.
+
+## DEC-055 — the desktop app auto-starts the web UI by spawning the portable CLI, not by serving it itself (s080, FE-026)
+
+- **Context:** the user reported FE-024 ("auto start webui by the opencode.exe program") as not working. s080
+  reproduced the whole path and found the feature **works in the TUI** and **does not exist in the desktop app**:
+  FE-024 is wired into `cli/cmd/tui.ts:269` only, while the desktop starts an in-process sidecar
+  (`main/sidecar.ts:60`) on a **random loopback port** with a **random UUID password** and
+  `OPENCODE_DISABLE_EMBEDDED_WEB_UI=true`. The user's answer confirmed it: they started the installed desktop app.
+- **Decided (by the user, after the options were laid out):** the desktop spawns the **portable `opencode.exe`
+  that the installer already ships** (`resources/opencode.exe`, the binary `launch-web.cmd` runs) as
+  `web --autostart`, killed with the app. The password is `OPENCODE_SERVER_PASSWORD` from the environment when
+  set. **Rejected:** making the desktop's own server serve the page (it would require embedding the app into
+  `build-node.ts`, a second copy of the app in the installer, and a second `Server.listen` that clobbers
+  `server/server.ts:71`'s module-level `url`), and the cheaper "fix the TUI only" (the user runs the desktop app).
+- **Why spawn rather than share, in one line:** the decision needs the global config (`opencode.jsonc`, comments
+  and all). Doing that inside Electron means reimplementing the config file order and JSONC parsing and then
+  drifting from it. So **the child decides**: `web --autostart` applies the existing, unit-tested policy
+  (`cli/web-autostart.ts`) and the desktop only owns a path and a lifetime. The policy stays in one place, which
+  is why FE-024 and FE-026 cannot disagree about when to listen.
+- **Consequences to remember:**
+  1. **The child must not inherit `OPENCODE_DISABLE_EMBEDDED_WEB_UI`** (it would answer `/` with 404) nor
+     `OPENCODE_CLIENT=desktop`. Both are stripped in `webuiChildEnv`; that function is the whole reason the
+     module exists and it is unit-tested.
+  2. **`XDG_STATE_HOME` is deliberately kept**, so both processes share one database and the phone shows the
+     sessions the desktop window shows. That is two writers on one SQLite file — WAL tolerates it, and the
+     precedent (FU-043/DEC-023) was about two long-lived servers, but `SQLITE_BUSY` in the desktop log would be
+     the signal to revisit.
+  3. **`web --autostart` never opens a browser.** Plain `web` calls `open()`; a desktop app that opens a tab on
+     every launch is a regression, so the flag suppresses it.
+  4. **"Disabled" is a silent exit 0** and a failed bind is logged with its port — the FU-101 lesson, applied
+     where nobody is watching the console (this child has no terminal at all).
+  5. The **flag-vs-config precedence** (`--hostname` > `server.hostname` > wildcard request > loopback
+     downgrade) is a pure function `autostartHostname` with 3 tests, because writing it backwards is invisible
+     on a laptop and I wrote it backwards the first time.
+- **What was deliberately NOT fixed (user's scope choice: desktop only):** the TUI path still prints its
+  confirmation for ~1 s before the TUI erases the screen, and the Admin tab still has no hostname row, so the
+  TUI path stays loopback-only. Tracked in ide `FU-106`.
+- **Verified on this box, from source:** secured → binds `0.0.0.0` + prints network URLs; unsecured → binds
+  `127.0.0.1` + prints the unsecured warning; `autoStart: false` → exits 0, prints nothing, binds nothing. The
+  desktop side (path resolution, env scrubbing) is unit-tested; **the Windows launch itself is unverified here**
+  and needs the user's machine.
