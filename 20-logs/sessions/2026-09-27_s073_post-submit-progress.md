@@ -368,3 +368,27 @@ turned out to be mine.
 - **FU-060, FU-074, FU-077, FU-092, FU-102 re-checked and still accurate**, each waiting on a decision or on
   work I have not been asked to do (a remove/keep choice, a documented desktop packaging path, optional
   polish, the SDK regeneration, and a server-side API capability).
+
+## Deployed `f3db840` and the fade verified live — plus worktrees I left behind
+
+**`:4447` is now `1.1.20260928061739`, pid 230458**, built from a detached worktree at `origin/dev` with
+zero uncommitted files in the build tree. Verification **10/10**, and the check that carries the meaning is
+the locale split:
+
+| locale | strip | content | result |
+|---|---|---|---|
+| **English** | 358px | 421px (6 tabs) | scrolls to `scrollLeft=63/63` → the fade **is** warranted |
+| **zh** | 358px | 358px (6 tabs) | fits exactly → **no fade is drawn** |
+
+The four layers and `background-attachment: local, local, scroll, scroll` are live in both, and 0 page
+errors in both. This is exactly what the pre-build measurement predicted, and it is why the implementation
+is four attachment layers and not a static overlay: a static fade would have dimmed the ends of the strip
+in the user's own language for no reason.
+
+**A piece of junk I created, found and removed.** `git worktree list` showed **9** entries after the
+deploy. Eight were `prunable` — their directories were gone — created by **my own** `test:httpapi` runs:
+the harness registers a git worktree per scenario that calls `worktree create`, under
+`/tmp/opencode-httpapi-global-*`, and deleting the directory does not unregister it. Pruned the
+registrations and deleted the eight `opencode/*` scratch branches (every one at `75e5c77`, an ancestor of
+`dev`, so nothing unmerged was lost). The fork is back to one worktree, one branch, clean tree. **Worth
+remembering: every `test:httpapi` run leaves these behind.**
