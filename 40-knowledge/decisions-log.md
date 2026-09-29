@@ -1501,3 +1501,45 @@ case) go red.
   `127.0.0.1` + prints the unsecured warning; `autoStart: false` → exits 0, prints nothing, binds nothing. The
   desktop side (path resolution, env scrubbing) is unit-tested; **the Windows launch itself is unverified here**
   and needs the user's machine.
+
+## DEC-056 — the window title counts **agent tabs**, not agent actions, and is the one surface that survives app-switching (s081, FE-027)
+
+- **Context:** the user asked for `MarkCode [1 of 2]` in the web UI title, "1 = number of completed agent
+  action, 2 = total number, keep update", then **refined it before any code was written**: *"it is the number of
+  opened project agent tab that finished / idle VS total number of opened project agent tab"*. The refinement
+  changes the feature, so the first reading is recorded here as a rejected option rather than quietly dropped:
+  counting **tool calls** was the richer signal, but it needs a total the agent does not know in advance, and it
+  is invisible unless you are already looking at that session.
+- **Decided:** the numerator is the open agent tabs that are **finished/idle**, the denominator is **every open
+  agent tab**, and it is mounted where `document.title` can see all of them — `SharedProviders` in `app.tsx`,
+  beside `BodyDesignClass`, inside the router root, so it survives every route change and covers the browser
+  tab, the installed PWA and the desktop window from one implementation.
+- **Why tabs and not actions:** on a phone the title is the **only** part of the app still visible after you
+  switch to answer a message, and the question at that moment is "how many of my agents are done?", not "which
+  tool is it on?". Tabs are also the one unit the user can see and reason about; a tool count grows for reasons
+  the user cannot predict, which is exactly what makes a denominator untrustworthy.
+- **The definitions, so this is not re-decided later:**
+  1. **"Finished" = `!sync.session.data.session_working(sessionID)`** — the app's own definition
+     (`server-session.ts:214`, `session_status[id].type !== "idle"`), so `busy` **and** `retry` both count as not
+     finished. Reusing it is the point: the title cannot disagree with the sidebar dot or the Thinking row.
+  2. **A tab whose permission/question is waiting counts as finished.** It is the user's move, not the agent's.
+     This matches the sidebar, which also clears the working dot for a blocked session
+     (`pages/layout/sidebar-items.tsx:173-176`).
+  3. **Draft tabs are excluded from both numbers.** A `DraftTab` has no session and cannot be busy; counting it
+     would report an agent that does not exist yet as finished. Measured, not assumed: with a draft open next to
+     one busy session the title stayed `[0 of 1]` while the tab strip showed 2 tabs.
+  4. **No open agent tab → plain `MarkCode`.** Otherwise the counter appears immediately, including `[1 of 1]`,
+     and the finished end state stays visible as `[2 of 2]` rather than blinking away.
+- **Localizable part, product name that is not:** `MarkCode` stays in code (it is already the static title in
+   `index.html:9`, and a product name is not translated); the counter is the new key `app.title.tabs` in
+   **`packages/app/src/i18n/en.ts` + all 61 non-English locales** — English source copy byte-for-byte, `zh`/`zht`
+   translated (`已完成 {{done}} / 共 {{total}}`) — because `i18n/parity.test.ts` fails if one is missing. The live
+   zht run rendered `MarkCode [已完成 0 / 共 1]`, which is the point of doing it properly.
+- **How it was verified without touching the running server:** the fresh `packages/app/dist` was served to a
+  Playwright browser that intercepted **only the document and `/assets`**, so the new code ran against the live
+  :4447 API and the live session statuses. No restart, no deploy. Measured: `MarkCode` → `[0 of 1]` (that session
+   was busy — it was the session running the probe) → `[0 of 1]` with a draft open → `[0 of 2]` **0.26 s after
+   Enter** → `[1 of 2]` when the turn ended. 0 page errors.
+- **Consequence to remember:** the title reads `document.title` only — there is no `<meta>`/notification coupling,
+   and no per-session breakdown. If the count is ever wanted per session, the source is the same `session_working`
+   call and the tab list; do not add a second status source.
