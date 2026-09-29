@@ -1543,3 +1543,148 @@ case) go red.
 - **Consequence to remember:** the title reads `document.title` only — there is no `<meta>`/notification coupling,
    and no per-session breakdown. If the count is ever wanted per session, the source is the same `session_working`
    call and the tab list; do not add a second status source.
+
+---
+
+## DEC-057 — The Commentary narration is a **server-side, lease-gated** sidecar LLM call with a **derived** cursor (s082, FE-028, 2026-09-29)
+
+**Decision.** A new `SessionCommentary` service in `packages/opencode/src/session/commentary.ts` owns the
+narration. It ticks every 10 s, but only for sessions that are **busy** *and* have an **in-memory lease**
+held by some open client. Each tick digests the messages since the last commentary's `anchor`, asks the
+session's own model for one ≤30-word line, and stores a row in a new `session_commentary` table, announced
+as a new `session.commentary` event. On the client, a third column sits beside the Review panel, toggled by
+a new header button.
+
+**Why each part, and what was rejected:**
+
+- **Server-side loop, not client-driven.** Only the server knows the model the turn is really using, and only
+  the server can keep *one* narration shared by the phone and the desktop. Client-driven polling (the first
+  option offered) makes every device invent a different story and loses it on reload.
+- **Lease-gated, not always-on.** The user chose the middle option: the loop runs only while somebody is
+  watching, so it costs nothing on an unwatched session but still produces one shared narration. The lease
+  is a `Map<SessionID, expiresAt>` in process memory — sessions are process-local by rule ("Keep local
+  Session drains process-local"), so there is nothing to persist and nothing to clean up on restart. It is
+  keyed by session id, **not** counted, so two clients on one session still speak once.
+- **The cursor is *derived*, never persisted.** The newest commentary row carries the `anchor` message id it
+  describes; the next digest is everything strictly after it. This removes a table — and it removes the
+  trap that made the obvious design wrong: a persisted cursor has to live in `session.metadata`, and
+  `Session.setMetadata` → `patch()` (`packages/opencode/src/session/session.ts:761-764`) publishes a **full
+  `session.updated`**, i.e. a whole-session SSE broadcast **every 10 s**, re-rendering the sidebar's whole
+  session list each time. Restart-safe for free: the cursor is whatever the last row said.
+- **"Let the LLM decide" is a JSON contract**, `{"speak":false}` / `{"speak":true,"text":"…"}`, parsed
+  forgivingly (fenced, bare, malformed) with a failure mode of **show it anyway**. A `WAIT` sentinel was
+  rejected because it cannot be told apart from a model that genuinely wrote the word "wait".
+- **Continuity is the last 100 *commentary entries*, not the last 100 session messages.** The request said
+  "previous 100 message" inside a sentence about continuity of the *talk*; 100 raw session messages per tick
+  would cost more than the turn itself and would not read as a continuous narrative. The raw side is already
+  covered by the digest, so nothing is lost. The 100 is then trimmed to a 24 000-char budget.
+- **Model: the session's own model, with `small` as a config key** (`session.commentary.model`). The user
+  said "the same model that opencode using"; a 10 s cadence makes cost real, so the escape hatch is a
+  config key rather than a code change.
+- **Cost is guarded by `minActivityChars: 120`** — a tick with almost nothing new never calls the LLM at all.
+  Then: interval 10 s, min-gap 10 s, **max 20 entries per turn** (reset on each user message), digest capped
+  at 12 000 chars, entry capped at 240 chars. A 5-minute turn is therefore at most ~20 calls, usually far
+  fewer, and **zero when the session is idle**. Reasoning parts are excluded from the digest: bulkiest text
+  in a turn, usually hidden from the user, and the narrated result of a thought is the tool call after it.
+- **The 10 s loop is the only timer in the engine** — everything else is event-driven. It is the
+  highest-risk item and the reason P2 exists as its own phase.
+- **Desktop-only in this cut.** The whole side panel is behind `min-width: 768px` and the header buttons sit
+  in `hidden md:flex`. Given the mobile-first mission that is a real gap, filed as FU-111 rather than
+  quietly dropped.
+
+**Consequence to remember.** The precedent to copy is `SessionPrompt.ensureTitle`
+(`packages/opencode/src/session/prompt.ts:193-253`) — a hidden `native` agent, `tools: {}`, a resolved
+model, `Stream.filter(textDelta) → Stream.mkString`. The v2 twin is `SessionCompaction`
+(`packages/core/src/session/compaction.ts`). `SessionCompaction.serialize` is a *model* for the digest, not
+an import: it is core/v2 over v2 messages and not reusable for v1. The routes use a hand-rolled `fetch` with
+Basic auth (`packages/app/src/utils/server.ts:118-134`, the `fetchWebuiStatus` pattern) so no
+`bun run generate` is needed for them — but the **event** does enter the client union, so
+`bun run generate` in `packages/client` is required for it. Plan:
+`50-projects/p003-opencode-fork/notes/plan-commentary-panel.md`.
+
+### DEC-057 addendum — what building it actually changed (s082, 2026-09-29)
+
+Code complete, all gates green, **not committed / not built / not deployed**. Four things the plan got
+wrong, each found by building rather than by reading, and each worth recording because the *reason* is the
+lesson:
+
+1. **The digest must be text, not `ModelMessage[]`.** The plan said to reuse
+   `MessageV2.toModelMessagesEffect`. That is the wrong tool: the character caps and the reasoning-exclusion
+   only work on a rendered string, and feeding structured model messages would put back exactly the bulk
+   (media, full tool results) the caps exist to remove. The v1 serializer is ~35 lines, modelled on
+   `SessionCompaction.serialize` but not imported from it — that one is core/v2 over v2 messages.
+2. **The min-gap belongs to the newest stored entry, not to an in-memory map.** The plan had a `lastSpoke`
+   map. Replacing it with the newest entry's `time` removes a piece of state *and* fixes a real bug: the map
+   is empty after a restart, so the first tick after a restart ignored the per-turn budget entirely. A
+   side effect: `commentary.minGap` became a real config key, because effect `4.0.0-beta.83`'s
+   `TestClock.adjust` is broken and the gap was otherwise untestable — a rate control being tunable per
+   deployment is defensible on its own, and the *character* caps stayed non-configurable, which is where a
+   knob per value would actually be dangerous.
+3. **`Effect.repeat` runs its effect immediately.** So the loop's first pass is now delayed by one interval:
+   a freshly created instance must not spend a model call before anyone has had a chance to open the panel.
+   This was found because the loop raced the explicit `tick()` calls in the service tests — the same race
+   would have made a real open panel double-narrate.
+4. **The initial paint must not be written into the sync store.** Nothing in `packages/app` writes that
+   store except the event reducer. The panel keeps the fetched rows in a local signal and merges them with
+   the SSE list on `seq`, so a line arriving both live and in the payload is shown once and the store stays
+   event-driven only.
+
+Two defects in my own code, caught by its own tests: `truncate` appended the ellipsis **outside** the
+budget, so every ceiling was off by one and `MAX_ENTRY_CHARS` was a lie; and `{"speak":true,"text":""}` fell
+through to the raw-text path, which would have **stored the JSON itself as a narration line**. And one
+backwards assumption: `SESSION_CONTENT_EVENTS` is the set that gets *dropped* when a consumer asks for no
+session content, so adding `session.commentary` to it would have deleted the narration in exactly the
+trimmed views where a cheap running summary is most useful.
+
+**The benchmark that `packages/app/AGENTS.md` requires, and the number that matters:** per-line cost is
+**flat from a 10-message timeline to a 5000-message one** — 2.37 / 2.98 / 1.35 / 1.34 µs per line at
+10 / 100 / 1000 / 5000. A 500x larger timeline costs the same per line, which is the isolation claim itself:
+the narration never reads or writes the message store, so a line every ten seconds cannot tax the timeline.
+On a 500-message timeline a line costs 1.63x a `message.part.updated` (~2-3µs, both O(1)).
+
+Gates: `bun turbo typecheck` 30/30 · app `test:unit` 792/0 · opencode 466/0 on the touched suites · schema
+18/0 · core migration 19/0 · `test:httpapi` 215/0/0/0 in all three modes, exit 0 · oxlint 0 errors, new
+files 0 warnings. **103 paths** (30 modified + 11 new + 62 locale files), non-locale **+783/−63**.
+
+The i18n keys are **English in all 62 locales**, per the FU-026 pattern and because `packages/app/AGENTS.md`
+forbids translating from model knowledge — fabricating 62 translations would be worse than a follow-up. Real
+`zh`/`zht` wording is outstanding, exactly as it was after s073.
+
+### DEC-057 addendum 2 — what the live server proved that no test could (s082, 2026-09-29, after deploy)
+
+Shipped as `412984d`, then fixed twice on the live server — `d0d0fd5` and `4218986`. Deployed build
+`1.1.20260929072355`, pid 1005463 on :4447. **Three things only a real run could show:**
+
+1. **The 10-second loop does fire.** The log shows `agent=commentary mode=primary` streams 14 s and 55 s
+   into a real turn on `dgx/general`. Every unit test called `tick()` directly, so the scheduler itself was
+   unproven until a turn was watched.
+2. **A fabricated provider on the carrier message is fatal, and the failure was invisible.** The synthetic
+   user message carried `model: { providerID: "commentary" }` — a provider that does not exist. The v1 LLM
+   path reads `user.model` for provider resolution, so the call selected a runtime and then died with no
+   completion and no stored entry. `SessionPrompt.ensureTitle` never hits this because it passes a *real*
+   user message from history. It stayed invisible because the tick funnelled failures through
+   `Effect.catchCause(() => Effect.succeed(""))` — **indistinguishable from the model choosing silence**, so
+   a hard fault looked exactly like working-as-designed. That is the silent-failure class this repo has filed
+   repeatedly (FU-101), and it is the reason the catch now logs. The regression test asserts the carrier's
+   `model.providerID`/`modelID` equal the session's, which fails against the old code.
+3. **A slow model silently disabled the panel.** One line took **99 s**, and while that call was in flight
+   the `inFlight` guard blocked every later tick — so one slow call turned narration off for that session
+   with no symptom at all. The call is now bounded (`CALL_TIMEOUT_MS = 120_000`) and a timeout is logged.
+   The stall path is deliberately **not** unit tested, because proving it means waiting 120 seconds; the
+   test asserts the ceiling exists and is sane relative to the tick, and says so in a comment. The release
+   is proven by the live run (a second tick fired 41 s after the first returned).
+
+**The prompt's own quality is now a finding, not a decision.** A direct probe of the gateway
+(`192.168.1.202:8102`) with the real `commentary.txt` shows `dgx/general` returning its **monologue in
+`content`** — "We need answer JSON only. Need analyze in English…" — truncated at 212 tokens before any
+answer. It is a reasoning model, so a request for a 30-word JSON object is answered slowly and after
+lengthy visible thinking. And the first line it produced narrated the *user's instruction* back rather than
+the agent's progress, which the prompt permits. Both are FU-115, and both are the user's call: default the
+narration to the small model, point it at `rtx/general` ("LLM Fast", already in their config), or accept the
+cadence and show "thinking" while a call is in flight.
+
+**A methodological note worth keeping.** I twice concluded "working" from absence of an error, and twice
+concluded "broken" from absence of a result, and both were wrong. What settled it was bisecting against a
+clean tree and then probing the dependency directly — first the gateway, then the log window around the
+exact stream line. The first "it's broken" conclusion was really "I looked for 50 seconds at a call that
+takes 99."
