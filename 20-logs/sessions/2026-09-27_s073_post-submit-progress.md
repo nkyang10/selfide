@@ -392,3 +392,50 @@ the harness registers a git worktree per scenario that calls `worktree create`, 
 registrations and deleted the eight `opencode/*` scratch branches (every one at `75e5c77`, an ancestor of
 `dev`, so nothing unmerged was lost). The fork is back to one worktree, one branch, clean tree. **Worth
 remembering: every `test:httpapi` run leaves these behind.**
+
+## "Anything missing?" — the gap audit found a real bug in what I shipped
+
+Asking that question was worth more than listing known unknowns, because the first thing I had *not*
+verified turned out to be broken.
+
+**The "Waiting for the model" stage never fired.** A live probe of the deployed build, one hard prompt on
+`dgx/general`:
+
+```
+思考中思考中· 49 秒 / 49 秒
+…
+思考中思考中· 59 秒 / 59 秒
+saw 等待模型回应: false
+```
+
+Fifty-nine seconds of complete silence, and the row still claimed the model was thinking. The cause is
+embarrassing in hindsight: progress was measured as **"an assistant message exists"**, and the server
+creates that message the instant a turn starts — so the flag was true for *every* real turn and the
+waiting stage was dead code.
+
+**Why a passing test did not catch it.** The one e2e case for this stage used a fixture with a user
+message and *no* assistant message, which is not a state any real turn passes through. And no fixture
+*could* express the state that matters: the **v1 event schema requires `time.completed`** on an
+assistant message, so feeding one to `validateTimelineEvent` fails outright. The exact situation the
+feature exists for — a slow model holding an open, empty assistant message — is unrepresentable in the
+browser harness. That is why the rule now lives in pure functions where it can be tested:
+
+- `turnProducedOutput(parts)` — output is text, reasoning, or a **finished** tool. A *running* tool is
+  progress, so a long `bash` never trips the waiting state.
+- `turnStage({ pending, producedOutput, silenceMs, waitThreshold })` — the whole decision, 8 unit cases
+  covering both directions, the four output kinds and the internal `step-*`/`patch` markers.
+- threshold **10 s → 20 s**: that model class routinely takes 15–20 s for a first token, so 10 s would
+  have cried wolf on an ordinary slow start.
+
+The e2e keeps the half a fixture can represent and now says in a comment which half that is, instead of
+implying it covers the rest.
+
+**Also confirmed:** the user's session-ordering migration really applied — `session_time_updated_id_idx`
+is in the live `opencode-mark-dev.db`, not just in the code.
+
+**My mistake, caught and corrected:** a plain `git commit` commits the whole index, and the parallel
+session had four files staged, so my commit took eight. I noticed by reading `git show --name-only`
+rather than trusting the stat summary, then split it with `reset --soft` + `commit -- <my four paths>`,
+which leaves their index entries exactly as they were. Pushed `4218986..2bf74ce`; no history rewritten,
+their work untouched. This is the second time today that a shared index could have leaked one session's
+work into another's commit — the mitigation that actually works is to always pass explicit paths.
