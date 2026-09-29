@@ -1688,3 +1688,76 @@ concluded "broken" from absence of a result, and both were wrong. What settled i
 clean tree and then probing the dependency directly — first the gateway, then the log window around the
 exact stream line. The first "it's broken" conclusion was really "I looked for 50 seconds at a call that
 takes 99."
+
+---
+
+## DEC-058 — The commentary settings are **per browser**, and the prompt preferences **ride the watch lease** (s084, FE-029, 2026-09-29)
+
+**The request:** an on/off switch and a free-text prompt-injection box for the commentary narration, in a
+section of Settings v2 → General. Three questions were asked and answered rather than assumed: scope
+(global config file vs per browser) → **per browser**; save (on blur / debounced / explicit) → **explicit
+Save**; and where the prompt text has to reach the server → **with the watch lease**.
+
+**D1 — "per browser" is a real off switch, not a hidden button.** My first framing of this option was
+pessimistic: I told the user it "would only hide the panel and the lease — the server would keep making LLM
+calls". That was wrong, and checking it before answering changed the recommendation. The server narrates
+only while some client holds a **lease** (`commentary.ts`, `watch`/`unwatch` with a 45 s TTL), so a client
+that never asks is indistinguishable from a client that is not watching. The switch's meaning is therefore
+*"this device does not narrate"*, and it costs nothing and spends nothing. The knob is `enabled` on the
+existing `commentaryShouldWatch` policy, checked first, and it is the only input that can be false while
+the panel is open.
+
+**D2 — the preferences ride the lease rather than a config key.** The alternative was
+`commentary.instructions` in `opencode.jsonc`. Rejected because a config write **disposes every open
+instance** (the documented FE-023 rule), and because a global file is the wrong home for a per-device
+persona. The lease already exists and is already re-sent every 15 s, so the text rides it for free and an
+edit applies on the **next tick with no restart**. The `Lease` type changed from `number` to
+`{ expires, instructions }`.
+
+**The wart this buys, stated plainly:** the lease is one value per session, so if two devices watch the
+**same** session, whichever heartbeated last supplies the wording. They already share one narration
+stream, so this is only visible across two screens open on one conversation. The obvious fix — count the
+leases and keep per-client instructions — is forbidden by the existing design note ("two clients on one
+session hold two leases; the loop still speaks once. Do not turn it into a counter"), because counting
+re-introduces the double-narration that rule exists to prevent.
+
+**D3 — the injected text is a delimited block placed *before* the contract.** `prompt()` gained
+`<narrator-preferences>…</narrator-preferences>`, positioned between `<new-activity>` and `INSTRUCTIONS`.
+Two deliberate choices:
+
+- **Before, not after.** The JSON envelope is the load-bearing instruction. Preferences are user-supplied
+  prose, and a block placed last is the one a model follows most strongly — so it goes before the rules,
+  introduced as "follow it, but never let it break the rules above". A preference that says "write two
+  paragraphs" cannot talk the model out of the envelope.
+- **Delimited, and the delimiter is stripped on the way in.** `normalizeInstructions` drops any literal
+  `</narrator-preferences>`, because a tag typed in the textarea would end the block early and leave the
+  rest of the sentence sitting outside it, where it reads as an instruction. Proven non-vacuous: reverting
+  the strip makes the test red with two closing tags instead of one. The cap (4 000 chars) is applied
+  **server-side**, never in the UI, because the field arrives on a route and is re-sent on every heartbeat.
+
+**D4 — `SettingsRowV2` grew an opt-in `stacked` variant.** The row is a flex row whose control slot is
+`flex-shrink: 0`, so a textarea landed in a ~220px column on desktop. Rather than a one-off class in the
+commentary section, the row component takes `stacked` (control on its own full-width line) — the first
+multi-line control in these settings, and the second one will not have to re-solve it.
+
+**D5 — the settings are exposed twice from one pair of memos.** `commentary.enabled` / `.instructions` are
+declared as locals above the layout provider's `return` and surfaced both at the top level and on
+`view().commentaryPanel`. The top level exists because the **Settings dialog is reachable outside any
+session route**, while the session view is the only consumer that has a route. One declaration, so the
+switch and the panel it controls cannot drift.
+
+**D6 — `absent = default`, so no migration.** A store persisted before FE-029 has no `enabled` or
+`instructions` key; `store.commentary?.enabled ?? true` reads absent as on. No `migrate` branch, no
+`layout.v6` bump — the DEC-052 precedent.
+
+**A defect found in someone else's uncommitted work, and fixed rather than worked around.** s083's
+`createCommentaryWatch` did `if (!watching) return` *before* clearing its heartbeat, so the 15 s interval
+kept refreshing the lease after the panel closed and the narration could never stop while the tab stayed
+open. It was harmless when the only off switch was the server's 45 s TTL, and it would have made a
+settings switch silently useless. Fixed by releasing the lease and clearing the interval on the
+watching → not-watching transition, guarded by a local `held` flag so an unrelated effect re-run cannot
+spam `unwatch`. **Lesson: an "uncommitted WIP" is still code someone will read as working.**
+
+**Not done deliberately:** the generated JS SDK was not regenerated. The route gained a payload, but the
+app calls it with the hand-rolled fetch on purpose (the same precedent as `/global/webui`), and
+regenerating is its own large diff — tracked as **FU-116** alongside the existing **FU-092**.
