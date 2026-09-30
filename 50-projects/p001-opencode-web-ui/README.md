@@ -2,7 +2,9 @@
 
 **Project:** A web-interface wrapper around the **opencode** coding agent — better UI, better agentic web,
 **mobile-multitasking first**: run, monitor, and intervene in multiple agent sessions from any device.
-**Status:** 🟡 SCAFFOLDED — no product code yet (s001). Stack decision pending (FU-001).
+**Status:** 🟢 FIRST FEATURE SHIPPED — **FE-001** (fill a model's missing context size from its provider API,
+once) code-complete in the fork, committed `97363f7`, deployed `1.1.20260929181740`; DEC-059. The 9-point
+MVP below is still **unbuilt** (s001 scaffold decision FU-001 stands).
 **Bible:** `40-knowledge/agentic-web-ui-research.md` (landscape + UX patterns + MVP) · `40-knowledge/opencode-server-api.md` (the API we build on).
 
 ## Mission & differentiators
@@ -36,7 +38,7 @@ and a Linear-quality activity view — not a terminal echo.
 | `config/` | project configs, env templates, deploy configs |
 | `notes/` | design/feasibility notes |
 | `scripts/` | build/dev/deploy scripts (SoT) |
-| `features/` | per-feature specs/status (`FE-<NNN>-<slug>/spec.md` + `status.md`) |
+| `features/` | per-feature specs/status (`FE-<NNN>-<slug>/spec.md` + `status.md`). **FE-001** (model context size from the provider API) |
 | `sessions/` | per-session working notes for this project |
 
 ## References

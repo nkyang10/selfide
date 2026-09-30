@@ -1761,3 +1761,72 @@ spam `unwatch`. **Lesson: an "uncommitted WIP" is still code someone will read a
 **Not done deliberately:** the generated JS SDK was not regenerated. The route gained a payload, but the
 app calls it with the hand-rolled fetch on purpose (the same precedent as `/global/webui`), and
 regenerating is its own large diff — tracked as **FU-116** alongside the existing **FU-092**.
+
+## DEC-059 — A model's context size is **asked of its provider once**, and only a missing one is filled (s085, FE-001, 2026-09-30)
+
+**The request:** *"when the model selected has no context size specified, try to use the api to get the
+context size to fill in once"*. Three questions were asked and answered rather than assumed: source
+(provider `/models` vs the models.dev catalog vs both) → **the provider's own `/models`**; destination
+(config file / in-memory / client-side) → **in-memory only, per server session**; and stale values →
+**missing/zero only, never overwrite what the user wrote**.
+
+**D1 — the request was a real defect, and a worse one than a blank label.** `ocgo/opencode-go-default` is
+declared in the global config with no `limit` block, so it keeps the `Model.Info.empty` default
+`limit: { context: 0, output: 0 }` (`schema/src/model.ts:103`). Confirmed live on the running server on both
+the v1 and v2 routes. `0` is not cosmetic: **`SessionCompaction` opens with `if (context === undefined ||
+context <= 0) return false`** at `compaction.ts:180` **and** `:235`, so a session on such a model **never
+compacts at all** — it grows until the provider rejects it, silently. Separately the meter computes
+`usage: limit ? … : null` and `0` is falsy, so the progress ring has no denominator. One missing config
+key, two broken behaviours, neither of which says why.
+
+**D2 — the catalog is the only place that can fix both, so the fix goes there.** The context meter reads
+the v2 catalog (`GET /api/model` → `Catalog.Service`), and compaction reads the same resolved model
+(`session/runner/model.ts:100` → `route.defaults.limits`). Filling the catalog fixes the meter *and*
+compaction from one write. The hook is therefore inside `ConfigProviderPlugin`'s existing catalog
+transform, **immediately after** the `if (config.limit !== undefined)` line — so the "never overwrite a
+configured value" rule is visible in the same three lines that apply the configured value, rather than in a
+separate plugin that could be ordered wrongly against it. `State.ts:8-10` sanctions Effects in transforms
+and `provider.ts:1658-1668` already awaits a network call inside a state build, so this is the established
+pattern, not a new mechanism.
+
+**D3 — the API genuinely cannot always answer, so the feature must be able to say "no".** Probed all three
+gateways: `dgx` (vLLM) returns `max_model_len: 1048576`; **`ocgo` returns only `id,object,created,owned_by`
+— no context field at all**; `rtx` was **down**, answering HTTP 200 with `{"error":"proxy_error"}` on 3/3
+attempts. A fabricated number is *worse* than none, because that number is the compaction trigger — a
+guessed 128k would truncate a session that holds 1M. So only a value the provider itself reported may fill
+the gap, and a refusal is cached as a refusal.
+
+**D4 — "once" is enforced by a process-global cache keyed on the base URL, and the empty result is cached
+too.** This is load-bearing, not an optimisation. The catalog transform runs **once per open directory**
+and again on every `State.reload()` (config change, models.dev refresh — hourly), so a per-instance cache
+would re-hit the network for every open tab. Caching the *refusal* as well is what makes a provider that
+publishes nothing stop being asked, which is the difference between a one-time probe and a permanent
+per-reload tax. `State.create` serializes all transforms behind one semaphore, so two callers cannot race
+the cache and a simple result map is sufficient.
+
+**D5 — a provider with no credential in its record is skipped rather than called unauthenticated.** The
+catalog draft cannot see an env-var or integration credential (those live in `Integration`/`Credential`),
+so asking anyway would be a pointless request on every catalog build — and it would have made the existing
+`config/provider.test.ts` hit the real network against `https://example.test`. Hosted providers get their
+limits from the models.dev catalog and never reach this path, so nothing real is lost. This was found by
+reading the existing test rather than by a failing test.
+
+**The wart this buys, stated plainly:** in-memory means the fill does not survive a restart and is
+re-fetched next time. That is the accepted price of not writing `opencode.jsonc`, whose write path disposes
+every open instance. And **for the model that prompted the request the visible outcome is unchanged** —
+`ocgo/opencode-go-default` still reports `0` on the deployed build, because its gateway has no number to
+give. The feature fixes the mechanism; this particular provider is the case where the mechanism correctly
+answers "I don't know".
+
+**Side finding, deliberately not acted on:** `dgx/general` is configured `context: 500000` while its vLLM
+server reports `max_model_len: 1048576`. By D-decision-3 (missing/zero only) this is left exactly as the
+user wrote it, and a test now pins that it is never overwritten. Recorded rather than corrected — a stale
+value is a judgement call, not a bug this feature is entitled to make.
+
+**Two real bugs the tests caught, both of which a mock would have hidden.** (1) The first cache stored the
+`Effect` rather than its result, so it re-issued the request on every call — the opposite of "once", and
+invisible to any test that did not count requests against a real server. (2) `Effect.cached`, which
+`packages/opencode/AGENTS.md` advertises for deduplication, **does not memoize in effect
+`4.0.0-beta.83`** unless the inner effect it returns is hoisted once and reused; re-running its outer
+effect silently rebuilds an empty cache. Verified three ways (separate runtimes, one runtime, hoisted
+inner) and filed as FU-119 rather than worked around quietly.
