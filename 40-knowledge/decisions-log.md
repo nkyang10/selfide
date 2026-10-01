@@ -1830,3 +1830,133 @@ invisible to any test that did not count requests against a real server. (2) `Ef
 `4.0.0-beta.83`** unless the inner effect it returns is hoisted once and reused; re-running its outer
 effect silently rebuilds an empty cache. Verified three ways (separate runtimes, one runtime, hoisted
 inner) and filed as FU-119 rather than worked around quietly.
+
+---
+
+## DEC-060 — The commentary sidecar is deliberately **outside** the session's turn lock, and the TTS switch **lives in the panel title** (s090, 2026-10-01)
+
+### D1 — "Does the narration block the agent's work?" is answered by *which machinery each side uses*, not by a lock search
+
+The question was re-asked in s090 ("re-confirm there is no blocking by session of (commentary, prompt call
+wait), (llm to generate commentary, llm to do original agentic work)"), so this records the answer with the
+evidence rather than leaving it as a one-off reassurance.
+
+**What serializes the agent's turns is `SessionRunState`, and only `SessionRunState`.**
+`packages/opencode/src/session/run-state.ts:52-94` holds one `Runner` per session; `onBusy`/`onIdle`
+(`:60-65`) are the **only** writers of `SessionStatus`, and `assertNotBusy` (`:71-75`) is what turns a
+second turn into `Session.BusyError`. `SessionPrompt.loop` is reached through it.
+
+**The commentary never goes near it.** `SessionCommentary.tick` (`:746`) and `special` (`:898`) call
+`llm.stream` **directly** — the sibling shape of `SessionPrompt.ensureTitle`, which is the precedent the
+whole feature was built on (DEC-057). It calls `status.get` (`:726`, `:860`) and never `status.set`; its
+own `inFlight` / `specialInFlight` guards (`:745`, `:893`, cleared in `Effect.ensuring`) are private to
+the commentator. A grep for `Mutex` / `Semaphore` / `withLock` across `packages/opencode/src` finds locks
+only in `mcp/auth.ts`, `plugin/meta.ts`, `plugin/tui/runtime.ts`, `tool/edit.ts` (per file path) and
+`snapshot/index.ts` (per hash) — none of them on this path.
+
+So both directions hold, and neither is a timing hope:
+
+- a commentary call **cannot** make a prompt fail as busy, and a prompt **cannot** queue behind one;
+- the tick is `Effect.forkScoped` per session (`commentary.ts:963-964`), so a narration call never delays
+  the next pass or another watched session.
+
+**Proved on the running server, not argued** (`logs/deploy/opencode.log`, `run=e997c2bd`): `01:41:47.079
+stream agent=build`, then `01:41:48.540 stream agent=commentary` while the build step was still in flight;
+the agent's `permission=read` tool ran at `01:41:50.442` and the loop advanced `step=6`, `step=7` during
+it. A second session was narrated concurrently at `01:41:28.622`.
+
+**What *is* shared is the provider endpoint.** Two concurrent requests to one model: unremarkable on
+`ocgo`/`dgx`, potentially slow for both on a single-slot local server. That is a property of the
+deployment, not a lock in either path, and no code change would fix it.
+
+**The one real coupling is per-session and intentional:** a narration call holds that session's
+`inFlight`, so a slow call delays the *next narration for the same session* (bounded at
+`CALL_TIMEOUT_MS` 120s, DEC-057). It touches nothing else.
+
+### D2 — The spoken toggle belongs in the panel title bar, and the settings row was **removed**, not duplicated
+
+FU-122 put "Read the commentary aloud" in Settings ▸ General ▸ Commentary. The user asked for it beside
+the commentary title (s090). It moved, and the row was deleted rather than kept alongside.
+
+- **One switch, one store.** The switch reads `layout.commentary` — the same `audioEnabled` memo the
+  audio player reads (`context/layout.tsx:618-620`), which exists exactly so the two surfaces cannot
+  drift. A duplicate row would reintroduce the drift that memo was written to prevent, and would also be
+  two controls whose agreement nothing enforces.
+- **It keeps the one rule the removed row had:** disabled while narration itself is off, because a voice
+  for lines that are never produced is a control lying about its effect.
+- **No new i18n key.** The accessible name is the removed row's own title string, visually hidden. A
+  `session.commentary.audio.*` twin would mean 62 locale files and a fresh batch of the FU-116
+  English-placeholder class for one label that already exists and is already translated where it matters.
+  `i18n/parity.test.ts` stays 5/0 / 979 assertions.
+- **It is also the better autoplay answer.** The toggle doubles as the user gesture the browser's
+  autoplay policy requires (FU-122); beside the narration it is a gesture made *while reading*, which is
+  exactly when the reader decides they want sound.
+
+**Consequence accepted:** the panel must be reachable to reach the toggle. On mobile that is the
+commentary tab (FE-028/FU-111, latched on first visit), on desktop the column — which is also what takes
+the lease, so the control and the thing it controls are never visible apart.
+
+---
+
+## DEC-061 — A voice is a **(service, name) pair**, so the picker, the lease, the store and the content hash all carry the endpoint (s090, 2026-10-01)
+
+### The measurement that forced the design
+
+The user asked for "a dropdown box next commentary on/off switch to select which voice (include
+possible 8880 8881 different voice. active immediately)". Before writing anything, both ports on
+`192.168.1.162` were measured (`40-knowledge/tts-service-192-168-1-162.md`):
+
+**They are two builds of one service, not one service on two ports.** `:8880` proxies Azure's 322
+voices with 23 aliases; `:8881` publishes **exactly one** baked Cantonese voice
+(`canto-tts-nano-v1`) with 17 aliases. Cross-proved, so it is not a stale catalogue:
+`zh-HK-HiuMaanNeural` is **200 on :8880 and 400 on :8881**; `canto-tts-nano-v1` is **200 on :8881 and
+400 on :8880**. The audio differs for the *same words*: untagged 48 kbps vs 64 kbps with an ID3 tag.
+
+**The trap a flat list of names would have set:** both services answer to `cantonese`. A picker
+offering names, with the endpoint left as server config, would let a reader pick
+`canto-tts-nano-v1` and get **every line back text-only** — a 400 from the service, a logged warning
+nobody reads, and a panel that looks broken. So the endpoint is part of the value, not decoration.
+
+### D1 — The pair is carried in **four** places, and each one is load-bearing
+
+1. **The content hash.** `hashFor(voice, text, host?)` now includes the endpoint. The voice was
+   already in the hash precisely so "changing the voice invalidates the store instead of replaying
+   what the previous voice said" — and that argument extends one level up: without the host in the
+   hash, `:8880`'s recording is served for a line `:8881` was asked to speak. Existing rows keep their
+   stored hash, so every line already written still plays.
+2. **The store**, as `host` + `voice` behind **one** setter `setSpeech({host, voice})`. Two setters
+   would let a reader persist a voice with the wrong endpoint, which is the bug in a slower form.
+3. **The lease** (`voice`, `host`), both **optional and absent by default**. Absent means "whatever
+   the config says" — byte-for-byte what every client sent before the picker existed, so a config
+   alone still works and nothing changes until a voice is chosen. The host is validated by the
+   **existing** `speechBaseUrl` guard at render time; re-validating it in the lease would be a second
+   copy of the SSRF rule, and two copies drift.
+4. **The picker's option value**, and `hashFor` is the reason a duplicate name is two options rather
+   than one.
+
+### D2 — The catalogue is **fetched**, and a failure is **data**
+
+`GET /session/{id}/commentary/voices` → `{default: {host, voice}, sources: [...]}`, one entry per
+`commentary.speech.hosts` endpoint. Three decisions in it:
+
+- **Through the server, not the browser.** The speech box answers a preflight `OPTIONS` with `405`
+  and no CORS header — the same s087 finding that put the audio bytes behind a route.
+- **The config's default travels with the list.** It is config, and a picker that guessed would show
+  a different voice from the one the server is about to use, silently.
+- **A dead endpoint is `{voices: [], error}`, not an HTTP error, and a 200 with nothing usable counts
+  as a failure.** One speech box restarting must not empty the picker for the other, and "no voices"
+  and "not answering" are different facts. The failure caches for a **tenth** as long as a success
+  (1 min vs 10 min), measured against `:8881` refusing connections for ~90 s while this was written.
+
+The list is **not** hardcoded, reversing s085's "free text, not a 322-entry picker" — the user
+overruled it, and the reason it was right to overrule is that these two services are not the same
+catalogue. What survives from s085 is the part that was never about the UI: the entries are voice
+identifiers, so they are proper nouns and need no translation.
+
+### D3 — "Active immediately" means the **next line**, and the panel says so
+
+`createCommentaryWatch` already re-reads its inputs in a single effect, so adding `voice`/`host` as
+inputs means a pick re-takes the lease at once — no heartbeat, no restart, no config write. A line
+already on screen keeps the voice it was rendered with. That is the honest reading of "immediately":
+the audio is content-addressed and already stored, and re-rendering it would mean a second speech
+call for a line the reader has already heard.
