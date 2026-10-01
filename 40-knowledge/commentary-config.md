@@ -49,6 +49,64 @@ Nothing else is set, which means everything below is on its default.
 | `narrationHistory` | `100` | Previous entries shown to the model for continuity. |
 | `minGap` | `10000` | ms between two entries, measured from the newest **stored** entry, so it survives a restart. |
 
+### `enabled` exists in two places, and they default differently
+
+This is the one thing about this feature that is genuinely confusing, so it is
+spelled out rather than left to be inferred.
+
+| | Where | Default | Who reads it |
+|---|---|---|---|
+| `commentary.enabled` | **config file** | **`true`** | the server, in `tick` — returns immediately if false |
+| `commentary.enabled` | **the browser**, per device | **`false`** | `commentaryShouldWatch` — no lease without it |
+
+**Both must be true.** The chain, with every gate named:
+
+```
+browser toggle on --+
+foregrounded -------+--> commentaryShouldWatch --> POST /commentary/watch (the lease)
+panel open --------+                                  |
+                                                       v
+                                    the 10s loop iterates state.leases ONLY
+                                                       |
+config enabled on ------------------------------------+--> tick() --> llm.stream   <- the cost
+                                    (no lease => never ticked => nothing)  |
+```
+
+A browser whose narration is off **never takes a lease**, so its session is never
+in `state.leases`, `tick` is never called, and **no model call is made at all.**
+
+Measured, not assumed: a session running a real turn with narration off produced
+**0 commentary streams and 0 commentary entries** in the server log.
+
+### The four combinations
+
+| config | browser | What happens |
+|---|---|---|
+| `true` | `true` | Narration runs. The intended case. |
+| `true` | `false` | **Nothing happens and nothing is spent.** This is a fresh browser. |
+| `false` | `true` | The panel opens and **stays empty** — the lease is held but every `tick` returns at its first line. The browser also keeps heart-beating `/watch` every 15 s for a session that can never narrate: a wasted round trip, and a panel that looks broken rather than switched off. |
+| `false` | `false` | Nothing. |
+
+**Why the defaults differ.** They answer different questions. The config default
+is `true` because this is a server-side capability and a shared instance should
+not have narration disabled. The browser default is `false` because narration is
+not free — a watched session spends a model call roughly every ten seconds — and
+**a reader who never asked for it should not be paying for it or reading it.**
+Opting in is one click beside the lines.
+
+### The trap worth naming
+
+With the shipped defaults the **server is permissive and the browser is quiet**,
+which is the safe direction: nothing runs unless a device asks. But it means
+`commentary.enabled: true` in the config is **not** a statement that narration is
+happening — it is a statement that narration is *permitted*. Open a second browser
+and it starts silent; that is not a bug.
+
+The combination to avoid is `config false + browser true`, which presents as a
+panel that opens and never says anything. If you want narration off
+**everywhere**, the config flag is the only thing that does it — but turn the
+browser switch off as well, so the panel does not sit there looking broken.
+
 **What it costs.** A watched, busy session spends a model call roughly every
 `interval`, gated by `minActivityChars` and `minGap`. Measured on this box a
 single line takes **43–99 s** with a reasoning model, so the real cadence is
