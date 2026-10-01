@@ -1960,3 +1960,134 @@ inputs means a pick re-takes the lease at once — no heartbeat, no restart, no 
 already on screen keeps the voice it was rendered with. That is the honest reading of "immediately":
 the audio is content-addressed and already stored, and re-rendering it would mean a second speech
 call for a line the reader has already heard.
+
+## DEC-060 — An alias model's context size comes from **what it serves**, not from what it is named (s085, FE-001, 2026-09-30)
+
+**The correction that forced this.** DEC-059 concluded that `ocgo/opencode-go-default` had no obtainable
+context size because its gateway's `/v1/models` carries no context field. **The reader rejected that** — *"ocgo
+by api 應該有返 context size?"* — and was right. The mistake was mine and it is the exact failure this repo keeps
+filing: I verified **one route** and reported **"it does not exist."** Re-probing showed `/v1/models` really does
+say nothing (7 endpoint variants, 25 entries, keys union exactly `id,object,created,owned_by`) — but a **real
+completion answers in its headers**: `x-opencode-upstream-model-id: space-bunny`, `x-zen-model: space-bunny-free`,
+`X-Model-Profile: oc-go`. `opencode-go-default` is a **routing name**, and it points at `space-bunny-free`, whose
+size the catalog already knows (`1048576`, listed under both `opencode` and `opencode-go`). The user then ruled out
+the workaround: *"not hardcode context size in opencode.jsonc for opgo"* — consistent with DEC-059's in-memory
+choice, so the fix had to be dynamic.
+
+**D1 — the resolved-model name is a first-party value, which is what makes this safe to depend on.** `x-zen-model`
+is set by OpenCode's own Zen service (`console/app/src/routes/zen/util/handler.ts:255`) and already forwarded by
+its inference proxy allowlist (`lib/inference-proxy.ts:75`). It is not one gateway's private invention, so the
+dependency is on OpenCode's contract rather than on `ocgo`. `x-opencode-upstream-model-id` is the fallback.
+
+**D2 — the number still comes from a source that knows it; only the *mapping* is discovered.** The probe yields a
+model id, and the **size is then read from the catalog** opencode already trusts for every other model. That is
+what keeps this inside DEC-059's rule that no number may be invented: we learn *which model answers*, never *how
+big it is*.
+
+**D3 — only an alias costs a request, and that is provable rather than assumed.** The trigger is "still 0 after
+the `/models` probe". Every model id the catalog knows already arrives with a limit from the models-dev plugin, so
+anything at 0 is by definition an alias — the cheap test bounds the expensive one. Verified live: `dgx` and `rtx`
+(vLLM, real sizes) took **no** completion; only `ocgo` did.
+
+**D4 — there is no non-billable way to learn the mapping, and that was checked rather than assumed.** Five
+candidate discovery endpoints (`/v1/profiles`, `/v1/model-profiles`, `/profiles`, `/zen/go/models`,
+`/v1/endpoints`) all **404**. So a request is genuinely required, and the design's honesty is to keep it to one
+`max_tokens: 1` call per real alias per server process, cached alongside the alias (not just its size) so a later
+reload reuses the name.
+
+**D5 — failures keep 0 and warn, never guess.** The user's answer, and consistent with D2: no name, a name the
+catalog does not describe, a gateway error — all leave the size at 0 with a distinct log line. A wrong size is the
+compaction trigger, so the failure mode must be "no number", never "a plausible number".
+
+**What it cost, measured.** One catalog build over four providers including two LAN round trips, one alias probe
+and the 5 MB catalog fetch: **2156 ms**, once per server process. `ocgo/opencode-go-default` went from `0` (and
+therefore **no auto-compaction at all**) to **1048576**.
+
+**The wart, stated plainly.** An alias named `default` is by nature a moving target; the mapping is stable today
+(three identical resolutions) but nothing guarantees it stays, and the number is only refreshed on the next server
+start. This is **strictly better than hardcoding a stale value**, and it is the reason the reader's objection to
+hardcoding was right: a frozen number is wrong the day the alias moves.
+
+**A note on my own process, because it is the reusable lesson.** I stated a negative conclusion from a single
+positive observation and only corrected it because the user pushed back. The cheap guard is to ask "what other
+route could answer this?" before writing "no". Probing `/v1/models` seven ways would not have found it — only
+*asking the model* did.
+
+
+---
+
+## DEC-062 — Narration defaults **off**, its on/off lives in the panel, and sound is a **mute** rather than a second switch (s092, 2026-10-01)
+
+### D1 — Why off by default, and why the default lived in two places
+
+Narration is not free: a watched session spends a model call every ten seconds. A
+reader who never asked for it should not be paying for it or reading it.
+
+The change itself was one boolean, and it turned up a real defect on the way:
+**the store default and the memo's `??` fallback were in different files and both
+said `true`.** So which value a fresh browser actually got depended on which was
+consulted first — the same class of drift as s089's retention window. Both now say
+`false`, and the comment on the fallback says why they must agree.
+
+The panel toggle and the commentary icon are gated on `isDesktop()` and were never
+conditional on this flag, so "off by default" cost the reader nothing: turning it
+on is still one click.
+
+### D2 — The Settings row was removed and the switch moved into the panel
+
+Removing the row left narration with **no on/off control anywhere** — the panel's
+switch was `audioEnabled`, a different preference. So the control moved to the
+panel header, beside the lines it controls.
+
+Rejected: leaving a second switch in Settings. Two places to find one setting is
+how they drift, and the panel is where the reader is already looking.
+
+The row's `description` key went from **62 locales** rather than lingering as dead
+English. Its `title` survives because the panel switch reuses that exact string —
+reusing a key is free, minting a second one for the same sentence is the FU-116
+debt again.
+
+### D3 — Sound is a mute icon, not a switch, and the two are independent
+
+The user asked for both switches kept and independent. What changed is the
+affordance: sound became an **icon**, and it is no longer greyed out when narration
+is off.
+
+The reasoning, which is the part worth keeping: sound is a **modifier on** the
+narration switch, not a peer of it. With narration off there is nothing to hear.
+Two switches side by side say "independent peers"; the icon says what is actually
+true. Greying the audio switch out when narration was off was the specific thing
+that made the pair look broken — it implied a link that did not exist.
+
+It is muted by default, which it already was. **The change was the affordance, not
+the value**, and the commit says so, because "we changed the default" would have
+been a false account of it.
+
+### D4 — Two icons added, and why the mute glyph was drawn twice
+
+The icon set had 49 names and none of them audio, so `commentary-audio-on` /
+`commentary-audio-off` are new and additive — no existing icon changes.
+
+The first drawing was functionally correct and **illegible**: the two differed by a
+mark ~3.6 units wide in the corner of a 20-unit box, which is about three pixels on
+screen. The mute button therefore *did* flip its icon and *looked* unchanged, and
+that was reported as "clicking it does nothing". Muted now takes a single slash
+across the whole icon — the universal convention, and the only version readable at
+this size — and the button carries `state` and `aria-pressed` so its value is legible
+without studying the glyph, and to a screen reader.
+
+### D5 — The lesson underneath all four
+
+Three wrong diagnoses in a row, none of which a gate could have caught:
+
+1. "`icon` is not reactive" — true, and the first fix missed a **second** place the
+   same key was built.
+2. "the icon did not flip" — it did flip; it was illegible.
+3. "`paths: 0`, so nothing rendered" — **my probe was wrong**: this `Icon` uses a
+   sprite `<use href="#…">` and never an inline `<path>`.
+
+Throughout, typecheck was 30/30, app 845/0 and opencode 545/0. None of those can
+see a third-party component throwing, a glyph too small to read, or a probe querying
+the wrong DOM. This is FU-133 stated again in a new costume, and the standing
+recommendation is unchanged: **press the thing.** See DEC-062's sibling finding
+recorded as FU-135 for the `JSX.Element`-holds-a-signal class of bug.
