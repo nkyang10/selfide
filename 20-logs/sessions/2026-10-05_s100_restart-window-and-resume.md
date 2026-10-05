@@ -44,3 +44,36 @@ submits flushed on reconnect. S3 = interrupted derivation (no migration: tail as
 
 **Not deployed yet, deliberately:** with no client half the window is invisible, so deploying S1 alone
 buys nothing a reader can see.
+
+## Follow-up fixes from the self-review (user: "協助修正" the known gaps)
+
+Both recorded gaps from the review are now closed — commit **`8dcc25c`** (pushed).
+
+1. **`opencode serve` now drains too.** The handler moved into
+   `ServerLifecycle.installSignalDrain(label)` (module-level `installed` guard), called in **both**
+   `web.ts` and `serve.ts` — a headless server is the one most likely to be killed by tooling.
+
+2. **The drain now ends when the last turn finishes, not when the window elapses.** New
+   `packages/opencode/src/session/active-turns.ts` — a process-global counter with
+   `begin/end/active`. Hook: **`SessionPrompt.loop`** (`prompt.ts`) — the v1 loop is the live prompt
+   path for the web UI (the HTTP handler uses `SessionPrompt.Service`; `SessionV2.prompt` is only
+   reached from `control-plane.ts`), and the v2 `SessionExecution.active` set would have counted
+   nothing. `Effect.suspend` + `Effect.ensuring` around `ensureRunning` means:
+   - **joined waiters hold a slot** — a second `prompt()` onto a running turn keeps the count up
+     until that awaiter is satisfied (the safer lie for a drain);
+   - success, failure and interruption all release;
+   - `end()` clamps at zero, so a stray finalizer cannot produce "-1 turns".
+   The drain tick (500 ms) exits as soon as `remainingMs() == 0 || activeTurns == 0`, and logs which
+   of the two happened. `GET /global/lifecycle` now carries `activeTurns` — **the first live run
+   after wiring showed the field silently stripped**: I had added it to `Info` but not to the
+   `GlobalLifecycle` response schema, and `Schema.Struct` drops undeclared fields on encode. Fixed,
+   re-proven: `{"draining":false,…,"activeTurns":0}`.
+
+**Live proofs** (source instance, isolated XDG): idle server + 60 s window armed + SIGTERM →
+**"drain complete — exiting" at t+2 s** (was: full 60 s); autostart path still drains; second signal
+still exits immediately. `test/server` **339 pass / 2 fail** — the same two pre-existing failures
+(lifecycle tests now 9, covering the counter including the negative clamp).
+
+**Known limits, deliberate:** a standalone `SessionPrompt.shell` is not counted (deadline covers it);
+the busy-path live check (turn in flight → drain waits) still rides on S3's live check because it
+needs a real provider turn; the counter is per-process, which is exactly the unit a drain owns.
