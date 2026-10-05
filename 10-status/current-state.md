@@ -842,3 +842,33 @@ A web-interface wrapper around **opencode** (`opencode serve`, HTTP REST + SSE o
   ("fix all"), and "Set opencode default port to 4447" is back at row 9. 12 → 13 rows.
 - **Not fixed, deliberately:** a `limit=15` page still renders as 12–13 rows because child/archived sessions are
   dropped client-side after the fetch → **FU-102**.
+
+---
+
+## 2026-10-05 — s098: close button on the new-session tab page
+
+- **Ask:** the new-session (draft) page had no visible way to close its tab from the session area
+  (top right); only tab-strip right-click menu / middle-click / Ctrl+W existed.
+- **Shipped (uncommitted):** `NewSessionCloseTab` in
+  `packages/app/src/pages/new-session/new-session-view.tsx` — ✕ `IconButtonV2` portaled into the
+  v2 titlebar right mount (far top right of the page, next to the status pill). Resolves the draft
+  tab by `draftId` param, closes via `tabs.closeTab(index)` (records for reopen, navigates to next
+  tab or home). Tooltip reuses `common.closeTab` + `tab.close` mod+w keybind; no new i18n strings.
+  Wired in `packages/app/src/pages/new-session.tsx` after `NewSessionStatus`.
+- **Verified:** app typecheck clean; app unit 852 pass / 0 fail.
+- **Note:** tab-strip tabs (incl. draft tabs) still have no per-tab ✕ — that was explicitly ruled
+  out by the user ("not the tab nav bar"). Fork tree uncommitted (see s098 record).
+- **Deployed (s098, RB-003): `1.1.20261005030342`, pid 3110424 on :4447.** Commit `4938605`
+  (rebased over parallel `fc5caae`, pushed; pre-push typecheck 30/30). `--detach` deploy killed
+  this session's own listener mid-call as designed and survived. Health endpoints are now 401
+  behind the FE-001 login gate — the runbook's anonymous health check is stale, use ss + pidfile
+  + web log instead. Not DOM-verified: open a new-session tab and confirm the top-right ✕ works.
+  The uncommitted s093 serper tree shipped in this build, as in s095/s097.
+- **s098 placement correction + redeploy: `1.1.20261005052148`, pid 3188312.** The first deploy put
+  the ✕ in the **titlebar right mount**; the user redirected it — *"i suppose to add inside
+  session-new-design similar to the parent of session-title-child"*. So it lives **inside the
+  page's rounded box** (`data-component="session-new-design"`), as `absolute right-2 top-0 flex
+  h-12 items-center` — same 48px row height and same `IconButtonV2 ghost-muted size="large"` as the
+  session page's title row (`message-timeline.tsx:1591`, right cluster `:1674+`). `Portal` removed
+  from the component; `pages/new-session.tsx` untouched again. Commits `4938605` + `d05959e`
+  pushed, typecheck 30/30, app unit 852/0. Not DOM-verified — user to reload and confirm.

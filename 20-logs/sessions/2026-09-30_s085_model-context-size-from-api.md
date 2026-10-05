@@ -1,6 +1,6 @@
 # s085 — Fill a model's missing context size from its provider API, once (FE-001 / DEC-059)
 
-**Date:** 2026-09-30 (UTC) · **Fork commit:** `97363f7` (not pushed) · **Deployed:** `1.1.20260929181740`, pid 1393483 on :4447
+**Date:** 2026-09-30 (UTC) · **Fork commits:** `97363f7` + `bf346e6` — **both now on `origin/dev`, pushed by a parallel session rather than by me** (see the addendum) · **Deployed:** `1.1.20261001041357`, pid 2555733 on :4447
 
 ## The request
 
@@ -127,7 +127,79 @@ probe directory was deleted and the user's config was never touched.
 
 ## Notes for the next session
 
-- The commit is **not pushed**. Pushing is a separate decision.
+- Both commits are **on `origin/dev`** — I did not push them; a parallel session committed on top of mine
+  and pushed. `bf346e6` verified as an ancestor of `origin/dev`.
 - The build compiled the whole checkout, so the **parallel session's 3 uncommitted
   `packages/opencode` files shipped in this binary** (FU-117 hazard, user approved it explicitly).
 - `packages/opencode/config.json` is still an untracked FU-112 artifact from a `test:httpapi` run.
+
+---
+
+# Addendum — the reader corrected me, and the fix that followed (DEC-060)
+
+**The reader's challenge:** *"ocgo by api 應該有返 context size?"* — **they were right and I was wrong.**
+
+What I had written in this record: "the honest outcome is that the mechanism correctly answers *I don't know*."
+That sentence was true about the **route I had tested** and false as a conclusion. I verified `/v1/models`
+(7 endpoint variants, 25 entries, keys union exactly `id,object,created,owned_by`) and reported **"it does not
+exist."** That is the exact error class this repo keeps filing: a single negative observation stated as an
+absolute.
+
+**What I had missed:** `opencode-go-default` is an **alias**, not a model. A real completion names what served it:
+
+```
+x-opencode-upstream-model-id: space-bunny
+x-zen-model:                 space-bunny-free
+X-Model-Profile:             oc-go
+```
+
+and `space-bunny-free` **is in the catalog** at `context: 1048576`. Stable across three consecutive requests.
+`x-zen-model` is set by **OpenCode's own Zen service** (`console/.../zen/util/handler.ts:255`) and already
+forwarded by its inference proxy (`lib/inference-proxy.ts:75`) — first-party, not one gateway's invention.
+
+**The reader's second instruction:** *"not hardcode context size in opencode.jsonc for opgo"* — consistent with
+their original in-memory choice, so the fix had to be dynamic. Then: **automatic probe**, and **keep 0 + warn on
+failure**.
+
+## What shipped — `bf346e6`, deployed `1.1.20261001041357` (pid 2555733)
+
+`catalogLimits` + `resolveAlias` in `model-context-size.ts`; the config plugin now reads the catalog once and,
+when a size is *still* 0, asks what the model serves and looks that name up. 4 files, +354/−38.
+
+**The load-bearing property: only an alias costs a request.** Every id the catalog knows already arrives with a
+limit from the models-dev plugin, so a model still at 0 is by definition an alias — the cheap test bounds the
+expensive one. Live: `dgx` and `rtx` took **no** completion; only `ocgo` did.
+
+**Five discovery endpoints were tried and all 404'd** (`/v1/profiles`, `/v1/model-profiles`, `/profiles`,
+`/zen/go/models`, `/v1/endpoints`), so a request is genuinely required — the honest design keeps it to one
+`max_tokens: 1` call per alias per process, and caches the **name** so reloads reuse it.
+
+## Live, on the deployed build
+
+```
+ocgo/opencode-go-default  limit={"context":1048576,"output":0}   ← was 0
+dgx/general               limit={"context":500000,"output":32000}  ← configured, untouched
+rtx/general               limit={"context":262144,"output":32000}  ← untouched
+```
+
+**And the reader's config was not edited** — `ocgo.opencode-go-default` still carries **no `limit` block**, read
+back after the deploy, so the number cannot have come from there.
+
+- Gates: `turbo typecheck` **30/30** · core **1121 pass / 16 fail** (baseline 1088 / the same 16) → **+33 tests**
+- Full catalog build with the alias probe and the 5 MB catalog fetch: **2156 ms**, once per process
+- oxlint **0 errors**; my file went 8 warnings → 1 by replacing three `unknown → Record` assertions with one
+  guarded `record()` helper
+
+## The reusable lesson
+
+I stated a negative conclusion from one positive observation and only corrected it because the user pushed back.
+Probing `/v1/models` seven ways would **not** have found it — only *asking the model* did. The guard is to ask
+"what other route could answer this?" before writing "no".
+
+## Process defect found and filed (FU-134)
+
+`open-followups.md` contains **two rows numbered FU-120** (s084's narration item and this feature's), because
+parallel sessions mint ids without seeing each other. My index-based edit of "FU-120" then ran from the **s084**
+row through this session's FU-121 and deleted **s084's follow-up plus my own FU-121**. Caught by
+`git diff --stat` reporting 4 deletions where 1 was intended; restored with `git checkout --`, then redone
+matching on session id as well as number. **Never edit a shared append-only tracker by number alone.**

@@ -35,20 +35,12 @@ Trigger on **any** of these — do not wait for the user to say "search":
 
 1. **Decide scope.** What exactly does the user want, and at what depth?
    If genuinely ambiguous, ask one clarifying question. Otherwise proceed.
-2. **Search with Serper (primary).** Run **2–4** queries from different
-   angles to avoid single-source bias. Use the prebuilt script (self-loads
-   the API key, no setup needed):
-
-   ```bash
-   python ~/.config/opencode/skills/web-research/storage/serper.py "your query"
-   python ~/.config/opencode/skills/web-research/storage/serper.py "query" --fresh week --num 10
-   python ~/.config/opencode/skills/web-research/storage/serper.py "query" --fresh day --num 5
-   ```
-
-   Freshness: `--fresh day|week|month|year` for recency. `--num N` for count.
-
+2. **Search with the `websearch` tool.** No key, no script, no setup — just
+   call the tool. On a server that holds a search key, that tool is Google via
+   Serper; otherwise it is Exa or Parallel. Run **2–4** queries from different
+   angles to avoid single-source bias.
 3. **Fetch the top hits** with `webfetch` to pull concrete details, numbers,
-   and exact quotes (the Serper snippets are short — verify against the page).
+   and exact quotes (search snippets are short — verify against the page).
    Prefer 2–3 authoritative sources.
 4. **Synthesize.** Lead with the **direct answer**, then supporting evidence.
    State the **as-of date** explicitly (e.g. "As of Sep 2026, …").
@@ -56,20 +48,34 @@ Trigger on **any** of these — do not wait for the user to say "search":
 6. **Flag uncertainty.** Note conflicting sources, stale data, or gaps rather
    than silently blending them.
 
+## Where the key lives — you do not need one
+
+The search key belongs to the **server**, not to you. The `websearch` tool runs
+inside the opencode process and uses `search.serper.key` from the server's
+config, so any client of that server searches with it: a browser, the CLI, a
+phone over the tunnel, a fresh machine with nothing installed.
+
+**So call the tool.** Do not ask the user for a key, do not look for one in the
+environment, and do not fall back to a script just because you cannot see one.
+
+The `storage/serper.py` script below is the **fallback for a server that does
+not hold a key** (someone else's machine, a plain upstream install). It needs
+your own `SERPER_API_KEY`, and using it there is your choice, not a
+prerequisite for searching here.
+
 ## Backends (in priority order)
 
-1. **Serper (Google API)** — primary. `serper.py` resolves the key from
-   `SERPER_API_KEY` env, else reads it from `~/.bashrc` automatically. Just
-   run the script.
-2. **SearXNG (Docker)** — optional private/self-hosted fallback if Serper is
-   down or you need no external calls. Deploy guide is in the "SearXNG"
-   section below.
-3. **Raw `websearch` / `webfetch` tools** — last resort if both are unavailable.
+1. **The `websearch` tool** — always first. It picks the provider the server
+   has: Serper when a key is configured, else Exa or Parallel.
+2. **`storage/serper.py`** — only if the tool is unavailable (no `websearch` in
+   your tool list). Needs your own key.
+3. **SearXNG (Docker)** — optional private/self-hosted fallback. Deploy guide is
+   in the "SearXNG" section below.
 
-## Serper (primary) — just run it
+## Serper via the script (fallback only — needs your own key)
 
-The script is ready to use. It **self-loads the API key** (env var first,
-then `~/.bashrc`), so you do NOT need to export anything first:
+The script self-loads the key (env var first, then `~/.bashrc`), so you do NOT
+need to export anything first:
 
 ```bash
 # from ANY working directory — the key is resolved internally
@@ -77,6 +83,8 @@ python ~/.config/opencode/skills/web-research/storage/serper.py "opencode instal
 python ~/.config/opencode/skills/web-research/storage/serper.py "vite 6 release date" --fresh month
 python ~/.config/opencode/skills/web-research/storage/serper.py "react server components" --json | jq '.organic[0]'
 ```
+
+Freshness: `--fresh day|week|month|year` for recency. `--num N` for count.
 
 Raw `curl` equivalent (if you need to inline it):
 
