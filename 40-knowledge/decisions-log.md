@@ -2091,3 +2091,216 @@ see a third-party component throwing, a glyph too small to read, or a probe quer
 the wrong DOM. This is FU-133 stated again in a new costume, and the standing
 recommendation is unchanged: **press the thing.** See DEC-062's sibling finding
 recorded as FU-135 for the `JSX.Element`-holds-a-signal class of bug.
+
+## DEC-063 — Serper is a **provider of `websearch`** with the key in the server's config, and the skill no longer asks for one (s093, 2026-10-01)
+
+### D1 — Why the tool, not the skill script
+
+s031 (2026-09-14) made web research work by shipping `storage/serper.py` with the
+`web-research` skill: the script ran **on the user's machine** and resolved the key
+from env or `~/.bashrc` (DEC-024 exists only because that indirection leaked). That
+answers "can *I* search", not "can anyone who opens this server search".
+
+The fork already had the seam: `websearch` is a **server-side** tool with pluggable
+providers (`packages/opencode/src/tool/websearch.ts`), so Serper became a third
+provider and the key became server state. Any client of that server — browser, CLI,
+a phone over the tunnel, a machine with nothing installed — now searches with it.
+
+The user chose this over a new tool id (`serper`) explicitly. The deciding argument
+is that the model **already calls `websearch`**: search works with no skill loaded at
+all, and no permission row or skill text has to name a new tool.
+
+### D2 — Where the key lives: literal in `~/.config/opencode/opencode.jsonc`
+
+The user chose the literal key over `{env:SERPER_API_KEY}`. Offered reasoning was the
+usual one (secret stays in env, config holds a reference); their call, and the
+argument for it is not weak: that file already carries every provider key in this
+setup in plaintext (`dgx`/`rtx`/`ocgo`), so a literal here introduces no new class of
+exposure, and it survives a shell that never sources `~/.bashrc` — which is exactly
+the failure DEC-024 had to paper over. The `{env:…}` form is still supported and
+documented in the field description for anyone who prefers it.
+
+New section `search` (`packages/core/src/v1/config/search.ts`), all fields optional,
+defaults in `SerperSearch.settings` — the same shape as `commentary.ts`.
+
+### D3 — Selection order, and what a key *means*
+
+```
+OPENCODE_WEBSEARCH_PROVIDER  >  search.provider  >  experimental flags  >  serper (if configured)  >  random exa/parallel
+```
+
+A key **outranks the random split** because configuring one is a deliberate act and
+it exists in exactly one place — the operator's server. The flags and the env
+override still win, and `search.provider` beats the flags because it sits in the same
+file as the key.
+
+Two consequences worth stating:
+
+- **A configured key also opens the tool's visibility gate.** `webSearchEnabled` used
+  to show `websearch` only to `opencode`/`opencode-go` providers and to nobody else.
+  A key in the server config means the operator bought search *for that server*, so a
+  provider with no built-in web search is not a reason to hide the tool from it.
+- **Choosing Serper without a key is loud, not silent.** The tool returns
+  "Serper was selected but no key is configured…". Falling back to another provider
+  would have hidden a misconfiguration behind working search results.
+
+### D4 — The key must never reach the transcript
+
+Serper answers a rejected key with a **message that quotes the key back**. The first
+version returned that message on the non-200 branch unredacted, and the unit test
+caught it immediately (`Serper replied 403: API key <the real key> is not valid`).
+`redact()` now guards every branch that can carry upstream text, including the 200-with-
+a-`message` shape Serper uses for "not enough credits". A key is still a key whether
+or not it is valid.
+
+### D5 — The skill's job shrank to "call the tool"
+
+`web-research` now leads with the tool and states plainly that the key belongs to the
+server: do not ask the user for one, do not hunt for one in the environment, do not
+fall back to a script just because you cannot see a key. `storage/serper.py` stays as
+the documented fallback **for a server that has no key** (someone else's machine, a
+plain upstream install) — deleting it would have removed the only working path for a
+reader who is not talking to this server.
+
+### D6 — Two tool systems, and the honest gap
+
+`packages/core/src/tool/websearch.ts` is the **V2** canonical tool. This work is in the
+**V1** path (`packages/opencode/src/tool/`), which is what the live server runs;
+`packages/core/src/tool/AGENTS.md:57` records that plugin boot is not wired to the
+canonical registry. Serper is therefore **absent from V2** — recorded as a follow-up
+rather than half-built in a layer nothing serves.
+
+## DEC-064 — A blocked autoplay is **parked, not dropped**: the prompt's tap *is* the playback (s095, 2026-10-03)
+
+- **Context:** FU-136, raised by s094. The commentary audio had exactly one reaction to a browser refusing
+  playback: `play()` rejected → one toast naming "autoplay blocked" → the line was dropped and the queue
+  moved on. s094 then measured what that costs on a phone and, more importantly, what a prompt could and could
+  not fix.
+- **The measurement that forced the design.** Under Chrome's strictest autoplay policy
+  (`--autoplay-policy=user-gesture-required`, where `play()` must be issued inside a live gesture), a real tap
+  on a real control changed nothing:
+
+  ```
+  09:24:04 tap → 09:24:06 play() REJECTED  NotAllowedError
+  09:25:35 tap → 09:25:46 play() REJECTED  NotAllowedError
+  ```
+
+  So "tap once to unlock sound" is not a thing that exists. The play always comes from a timer, and a timer is
+  never inside a gesture. **The tap has to be the playback.**
+- **Decision:** on `NotAllowedError` the clip is **parked** — the lock is held, the line keeps its place, and
+  `onGestureRequired` raises a prompt. The prompt's action calls `resume()`, which (a) wakes an `AudioContext`
+  with one frame of silence and (b) replays *that* clip synchronously inside the tap. One promise spans both
+  attempts, so the 400 ms gap, the high-water mark and the object URL's lifetime are unchanged.
+- **The name is the signal.** `NotAllowedError` means "a gesture will fix this"; anything else
+  (`NotSupportedError`, a media error, a CSP block) still takes the old path — one toast, lock released. Both
+  appear in s094's own trace: the notification chime rejects with `NotSupportedError`, and inviting the reader
+  to tap a button that cannot help would be worse than the toast.
+- **One prompt per clip.** A reader who tapped and still heard nothing is told once and the lock is released,
+  rather than being walked into a loop of taps.
+- **The `AudioContext` is the second half of the tap, not a nicety.** iOS routes a bare `HTMLAudioElement`
+  through the ringer category, so a phone on silent plays nothing; a context started inside a gesture is what
+  moves the session out of it. This is the only thing in the change that can address the silent switch, and it
+  costs one frame of silence.
+- **Where the prompt lives:** a `persistent` actionable toast (`showToast` already takes `actions`), raised by
+  the player component and dismissed by it — on the tap, when the sound is switched off, and on unmount. A
+  prompt that timed out before a slow reader got to it would be a line nobody hears, hence `persistent`.
+- **Copy:** three new keys, translated in **zh (Simplified), zht (Traditional) and ja**; the other 58 locales
+  carry the English string as a placeholder. Same trade as s090, same debt — FU-138.
+- **Alternatives rejected:**
+  - *Prime an element during the existing unmute tap and hope.* Untestable and, under the measurement above,
+    insufficient: it addresses "unlock", and the problem is not "unlock", it is "play inside the gesture".
+  - *Retry on a timer after the prompt.* The measurement says a timer is exactly what does not work.
+  - *Drop the line and say so.* Keeps the old behaviour, which is what made the feature look dead.
+  - *A modal.* Interrupts reading and would fire per line.
+- **Still unproven:** iOS itself. Chromium under its default policy plays to `ended` (s094), and this change
+  makes the blocked case recoverable anywhere a gesture is possible, but nobody has run it on an iPhone.
+
+---
+
+## DEC-065 — On a phone the lease follows the **three-tab layout**, not a tap (s098, 2026-10-05)
+
+Commit `5d1668e` · deployed `1.1.20261005010214` (pid 3037933) · live-verified at 390px.
+
+### D1 — What the report actually was
+
+The user pasted the live DOM of the tab they were sitting on
+(`#tabs-cl-9254-trigger-session`, `class="w-full !px-1 !py-2"` — a string unique to
+`session.tsx:2081`, so the compact mobile strip) and confirmed: **narrow width, Session tab, no
+commentary**. Reading the lease found two causes stacked, not one:
+
+1. `commentaryLatched` started `false` and its only writer was the Commentary tab's own `onClick`
+   (`session.tsx:2109`). No tap → no lease → the session is never in `state.leases` → `tick` never
+   runs → **nothing narrated, nothing spent**. Correct per s083, and invisible.
+2. Even after the tap, the panel mounts only under `mobileCommentary()` (`:2136`) and the chat is
+   suppressed when it does (`:2203`), so the Session tab renders no lines at all.
+
+The first cause is the one that mattered: **the tap was the feature's only affordance.** A reader who
+had not found the third tab got no lease, no lines, and no hint that the feature existed — which is
+"broken" from where they sit and "opt-in" from where I sat.
+
+### D2 — The user's rule, and it is smaller than the options I offered
+
+*"當個畫面變得窄嘅時候… 佢都當為睇commentary"* — when the screen goes narrow and it becomes three tabs,
+being anywhere in it, **including the Session tab**, counts as watching. That is one line:
+
+```ts
+return input.isDesktop ? input.panelOpened : true   // was: input.latched
+```
+
+I had offered four options, three of which added a surface (an inline ticker, an auto-latch keyed on
+busy-ness, a badge). The user took the fourth and simplest shape: **change the policy, add no UI.**
+
+**Desktop is untouched.** The column beside the chat is still the signal, because there the panel and
+the chat really are both on screen and the open state means something.
+
+### D3 — What bounded the cost without the latch, and how I know
+
+The latch existed so that "every session you ever opened" would not narrate forever. That risk is
+bounded by two terms that need no latch at all:
+
+- **`enabled`** — a switch the reader sets deliberately, off by default in every browser (DEC-062).
+- **one lease per session actually in front** — and this one I checked rather than assumed: there is
+  **no keep-alive** anywhere in `packages/app`/`packages/ui`, routes are plain
+  `component={SessionRoute}`, so a second agent tab is *unmounted*, not mounted-and-hidden. It cannot
+  hold a lease. The tab was never what bounded the cost.
+
+Cost of the change, stated plainly: with narration switched on, **every session you open on a phone
+narrates while it is in front**, at roughly one model call per `interval` gated by `minActivityChars`
+and `minGap` (measured 43–99 s per line with a reasoning model). That is the trade, and it is the
+user's, made knowingly.
+
+### D4 — Dead state was deleted, not deprecated
+
+`latched` is gone from the predicate, `commentaryLatched` is gone from `sessionViewState`, and the
+store write is gone from the tab's `onClick`. Keeping a field that no longer decides anything would
+have left a second, silent answer to "should this session be narrating" — the exact drift class this
+repo keeps filing (DEC-062's store-vs-memo default, s089's retention window).
+
+### D5 — The test is a regression test, and the harness was wrong three times
+
+The suite's middle assertion was run against the **old rule verbatim** and fails (`Expected: true,
+Received: false`), so it pins the behaviour rather than describing it. The live run then produced
+three harness faults, each of which read as a product fact:
+
+- `url.includes("/commentary/watch")` **drops every `/commentary/unwatch`** — the release is the event
+  being counted. Take vs release lives in the URL: `watch` sends a payload, `unwatch` sends none.
+- `#commentary-panel` is the **desktop** id; the mobile mount has none, so a null panel was a wrong
+  selector, not an empty panel. `data-slot="session-commentary-entry"` is layout-independent.
+- A second run measured **zero lease calls** and looked like a regression: it was DEC-062's
+  per-browser default in a **fresh browser profile**. The s087/s094 trap, walked into a third time
+  because I dropped the setup step.
+
+**What the live run actually measured**, at 390×664 on the deployed build, with zero taps on the
+Commentary tab after a reload: first **HOLD at 2916 ms**, **4 holds / 0 releases** across 50 s on the
+chat tab, 15 entries in the panel, **2 holds / 0 releases** after visiting the panel and returning —
+and `session_commentary` seq 40/41/42 written at 01:09:38/01:09:58/01:10:38, inside that window.
+
+### D6 — What stays open, deliberately
+
+- Narration still defaults **off** per browser, and its switch lives inside the panel, so a phone that
+  has never opened the Commentary tab still gets nothing. The user's answer was about the latch, not
+  the opt-in, so DEC-062's cost policy stands — but this is FU-137's remaining half.
+- Nothing renders in the chat tab. The user saw that and chose the policy change over the ticker; the
+  audio path (`commentary-audio-player.tsx:29`) gates on `enabled` and never needed the lease, so
+  sound was already the answer there.
+- The tab label still reads "Commentary" in every locale (FU-116).

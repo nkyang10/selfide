@@ -64,13 +64,20 @@ spelled out rather than left to be inferred.
 ```
 browser toggle on --+
 foregrounded -------+--> commentaryShouldWatch --> POST /commentary/watch (the lease)
-panel open --------+                                  |
+desktop: panel open +                                   |
+mobile: 3-tab layout +                                 |
                                                        v
                                     the 10s loop iterates state.leases ONLY
                                                        |
 config enabled on ------------------------------------+--> tick() --> llm.stream   <- the cost
                                     (no lease => never ticked => nothing)  |
 ```
+
+**The third gate depends on the width, not on a tap** (DEC-065, s098). On desktop it is the panel's
+open state. On mobile it is simply `true`: a phone shows the narration tab *or* the chat, so which tab
+is selected says nothing about whether you want the lines, and the lease follows the layout. There is
+no per-session latch and nothing to tap first. Only one session page is mounted at a time (the router
+has no keep-alive), so this is one lease per session in front of you — not one per tab you ever opened.
 
 A browser whose narration is off **never takes a lease**, so its session is never
 in `state.leases`, `tick` is never called, and **no model call is made at all.**
@@ -206,7 +213,8 @@ refused.
 
 | Symptom | Look at |
 |---|---|
-| No commentary at all | Is the browser toggle on? Narration is **off by default per browser**. |
+| No commentary at all | Is the browser toggle on? Narration is **off by default per browser**, and the switch is in the panel header — so on a phone you must visit the Commentary tab once to turn it on. After that, DEC-065 narrates from the chat tab too. |
+| Nothing happens on a phone, no matter which tab | Check the **lease**, not the panel: `POST /session/{id}/commentary/watch` must appear within ~3 s of opening the session. If it does not, `foregrounded` or the browser toggle is false. (Was: the latch — removed in DEC-065.) |
 | Text appears but never any sound | The mute icon in the panel header. Muted by default. |
 | Every line text-only, no error | The voice belongs to the *other* endpoint — the DEC-061 trap. Check `hosts`. |
 | One line sounds, the next is silent | The first is a fixed closing phrase; the next may not have rendered. Check `testing/web-4447.log` for `commentary audio`. |

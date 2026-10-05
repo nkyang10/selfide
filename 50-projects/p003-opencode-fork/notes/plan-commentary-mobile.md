@@ -1,6 +1,14 @@
 # Plan — FU-111: the Commentary panel on a phone (a third mobile tab)
 
-> **Status:** PLAN ONLY — no feature code written. Prepared 2026-09-29 (UTC), session **s083**.
+> **Status:** SHIPPED (s083, `940f2ba`) — **with §2's latch SUPERSEDED by DEC-065 (s098, `5d1668e`,
+> deployed `1.1.20261005010214`)**: mobile now holds the lease whenever the three-tab layout is up, so
+> the rule is `input.isDesktop ? input.panelOpened : true` and `latched` / `commentaryLatched` are
+> deleted. The placement in §3 stands. The latch was correct that tapping back to the chat must not
+> stop the narration, and wrong that the *tap* was what started it: it was the feature's only
+> affordance, so a reader in the Session tab got no lease and no lines. Read §2 below as history, not
+> as the current design.
+>
+> Original status: PLAN ONLY — no feature code written. Prepared 2026-09-29 (UTC), session **s083**.
 > **Closes:** FU-111 (raised by s082 when the desktop-only cut shipped).
 > **Builds on:** FE-028 / DEC-057, which is **live on :4447** (`1.1.20260929072355`, pid 1005463).
 > **User's two decisions** (asked before planning):
