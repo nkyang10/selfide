@@ -111,3 +111,42 @@ test is correct for when it gets fixed; the underlying import-chain breakage is 
 **Not yet live-verified in a browser** (FU-133): the countdown has never been watched. First chance:
 the next deploy — the deploy script arms the window over HTTP, so the banner should appear on every
 connected client before the kill.
+
+## S3 — DONE, committed `d3f9645`, pushed
+
+**Server** — `POST /session/{id}/resume` (httpapi session group + handler):
+- refuses `busy` (SessionStatus not idle) and `nothing-to-resume` (no incomplete tail assistant);
+- derivation = `MessageV2.latest(page({limit:10}))`'s assistant with `!time.completed` — the newest
+  10 messages suffice, no full-history scan;
+- admits the continuation via the same fire-and-fork path as `prompt_async`, with the interrupted
+  turn's own `agent` + `providerID/modelID`;
+- continuation text is LLM-facing English, **not i18n**, and says exactly what the recorded analysis
+  demands: the effect of started tool calls is *unknown*, verify read-only first, then finish, do not
+  redo done work;
+- **one-shot with no extra state**: the admitted continuation is a newer message than the incomplete
+  assistant, so the derivation stops being true the moment it lands.
+
+**SDK regenerated** (`packages/sdk/js` script/build.ts — the earlier "no drift" check ran against
+`packages/client`, the wrong package: the v2 SDK **is** generated from the httpapi groups). Both
+`global.lifecycle` and `session.resume` are now typed; `packages/client` (legacy protocol) unchanged.
+
+**Client** — derived, no migration, no boot scan:
+- `rows.ts`: a `TurnDivider{label:"cut-off"}` row when the turn is active, the session idle
+  (`!inFlight`), and the turn's **last** assistant has `!time.completed && !error`. A graceful abort
+  carries an error and stays with the existing "interrupted" divider; during a live turn the tail
+  assistant is also incomplete, which is why the idle condition is load-bearing.
+- `message-timeline.tsx`: the divider renders `SessionInterrupted` — accent dot, "Interrupted — the
+  server restarted mid-turn", and a **Resume** button calling
+  `sdk().client.session.resume({ sessionID })` (the raw v2 dir-scoped client; the compat layer's
+  `ServerApi` is the legacy client and has no resume). Marker vanishes reactively: status flips busy
+  on admission, and the derivation is false once the continuation lands.
+- i18n: `ui.message.cutOff` + `ui.message.cutOff.action` in the **ui** domain (the key lives in
+  `packages/ui/src/i18n`, not the app's) — en + 62 locales, real zh/zht.
+
+**Gates:** typecheck 30/30 · rows-current **11/11** (4 new: marks the last idle turn, marks nothing
+while busy/retry, marks nothing completed, marks only the last turn) · parity green · restart-state
+7/7 · `test/server` re-run **339/2** same-as-baseline.
+
+**Not live-verified yet (FU-133):** the happy path needs a real provider turn. The natural check:
+the next deploy interrupts this very session's turn — the marker + Resume should appear on it, and
+clicking it should continue the work. That is the validation plan.

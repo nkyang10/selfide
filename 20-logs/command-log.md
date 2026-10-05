@@ -520,3 +520,7 @@
 | 2026-10-05 08:20 | s100 | app | S2: restart-state.ts (phase machine, 404=idle, 500=outage) + restart.tsx (5s poll, local countdown) + restart-banner.tsx + submit hold/resubmit + i18n sweep (en+62, zh/zht real) | 0 | committed 218a2a6 |
 | 2026-10-05 08:25 | s100 | test | restart-state 7/7; parity green; test:unit 851/8 — **all 8 pre-existing** (submit.test.ts broken at HEAD: `use` missing from solid-js/web server build; --only-failures was masking it) | 0 | FU-144 filed |
 | 2026-10-05 08:26 | s100 | fork | push 218a2a6 | 0 | S2 in; countdown invisible until deployed |
+| 2026-10-05 09:10 | s100 | server+sdk | `POST /session/{id}/resume` + SDK regen (v2 gen covers httpapi groups; earlier "no drift" check used the wrong package) | 0 | typecheck 30/30; sdk gen has lifecycle + resume; packages/client unchanged |
+| 2026-10-05 09:15 | s100 | app | cut-off TurnDivider row + SessionInterrupted marker + Resume button + ui-domain i18n (en+62, zh/zht real) | 0 | committed d3f9645 |
+| 2026-10-05 09:18 | s100 | test | rows-current 11/11 (4 new cut-off cases) · parity green · restart-state 7/7 · test/server 339/2 | 0 | no regressions |
+| 2026-10-05 09:19 | s100 | fork | push d3f9645 | 0 | S1+S2+S3 all in; deploy pending (user's call) |
