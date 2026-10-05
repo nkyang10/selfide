@@ -113,7 +113,7 @@ something whose outcome is unknown. Replay-the-request is only safe when **no to
 | Order | Action | Effort |
 |---|---|---|
 | 1 | drain-on-shutdown + deploy waits for drain | small (script + one handler) |
-| 2 | serve app from disk in dev → **UI deploys kill nothing** | small-medium |
+| 2 | ~~serve app from disk in dev~~ → **SKIPPED by user**; the `OPENCODE_WEB_UI` dev mode already covers it and was judged not worth pursuing | — |
 | 3 | interrupted stamp + UI honesty | small |
 | 4 | resume-on-boot (bounded) + Resume button | medium |
 | 5 | DB lease/heartbeat → enables multi-instance + safe auto-resume | large |
@@ -121,6 +121,14 @@ something whose outcome is unknown. Replay-the-request is only safe when **no to
 
 **The honest summary:** recovery machinery is worth building, but it is a *mitigation*, not a fix.
 The fix is not killing sessions — which today is a choice our own deploy script makes in two lines.
+
+## Decision log for this design
+
+- **2026-10-05 — FU-142 / layer 0 item 2 SKIPPED by the user** (*"看起來不像能做到, skip"*). The
+  existing `OPENCODE_WEB_UI` proxy dev-mode was **not** verified live and no dist-from-disk path will
+  be built. **Do not re-propose it.** Consequence accepted: app-only deploys keep restarting the
+  daemon, so layer 1 (interrupted stamp) and layer 0 item 1 (drain-on-shutdown) are the only things
+  that can still reduce the damage.
 
 ## Open questions
 
