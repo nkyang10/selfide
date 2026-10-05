@@ -872,3 +872,29 @@ A web-interface wrapper around **opencode** (`opencode serve`, HTTP REST + SSE o
   session page's title row (`message-timeline.tsx:1591`, right cluster `:1674+`). `Portal` removed
   from the component; `pages/new-session.tsx` untouched again. Commits `4938605` + `d05959e`
   pushed, typecheck 30/30, app unit 852/0. Not DOM-verified — user to reload and confirm.
+- **Last updated:** 2026-10-05 (UTC) — **s099 is RESEARCH + DESIGN ONLY, no code: "can a session be
+  recovered when the daemon stops?"** Asked right after two deploys in one session killed the server
+  this agent was running on. Analysis in `40-knowledge/session-interruption-recovery.md`; follow-ups
+  FU-141/142/143. **The measurements that shape everything:** our deploy gives a turn **2 seconds**
+  (`kill` → `sleep 2` → `kill -9`, `deploy-web-4447.sh:46-52`) and the web path has **no SIGTERM
+  handler**; **`SessionStatus` is memory-only** (`session/status.ts:25-34`) so after a restart every
+  session reads *idle* and a killed turn is indistinguishable from a finished one; but **the
+  interruption signal already exists** — the assistant row persists with `time.completed` unset
+  (`core/session/message-updater.ts:33`, `projector.ts:148` both read "assistant && !time.completed"
+  as the in-flight message), and v1 already has `metadata.interrupted` for abandoned tools
+  (`session/prompt.ts:97-99`) while v2's runner has no equivalent. **No boot recovery exists** (the
+  fork's own rule: post-crash continuation "requires an explicit separate design"), and the
+  primitive a resume needs — the **durable inbox** (`core/session/input.ts` `admit` + `Delivery`) —
+  is already there. On the user's two ideas: **"report the possibly-ruined command and verify" is
+  correct and highest-value**, provided it says *unknown* rather than *failed* (a `shell.started`
+  with no completion means the effect is undetermined), verification is read-only and bounded, and
+  destructive tools get a **pre-execution snapshot** so there is something to roll back to;
+  **"replay the request" is right in exactly one case** (no tool had started — a pure LLM wait) and
+  dangerous otherwise, because it re-runs side effects and double-charges — the correct form is
+  resume-from-transcript through the inbox. **The layers the question did not name, in value order:
+  drain-on-shutdown → serve the app from disk in dev (UI-only deploys then kill *nothing*, and most
+  deploys here are `packages/app`-only) → interrupted stamp + Resume affordance → bounded opt-in
+  resume-on-boot → DB lease/heartbeat (needed before multi-instance handoff, since drains are
+  process-local) → pre-exec snapshots and idempotency keys.** **The honest framing recorded: recovery
+  machinery is a mitigation; not killing sessions is the fix, and that is a two-line choice in our
+  own deploy script.**
