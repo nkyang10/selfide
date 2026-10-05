@@ -57,11 +57,18 @@ arm_window() {
   local pid="$1"
   if [ -z "$pid" ]; then return 0; fi
   local port="${2:-$PORT}"
-  curl -sf -m 5 -X POST "http://127.0.0.1:$port/global/lifecycle" \
+  # The endpoint sits behind the FE-001 gate, so authenticate with the same credentials the server
+  # runs on. Without them the arm 401s and the announcement only happens at SIGTERM — the countdown
+  # still reaches clients, but the deploy loses its head start.
+  local auth=()
+  if [ -n "${OPENCODE_SERVER_PASSWORD:-}" ]; then
+    auth=(-u "${OPENCODE_SERVER_USERNAME:-opencode}:${OPENCODE_SERVER_PASSWORD}")
+  fi
+  curl -sf -m 5 "${auth[@]}" -X POST "http://127.0.0.1:$port/global/lifecycle" \
     -H "content-type: application/json" \
     -d "{\"timeoutMs\":$(( DRAIN_WINDOW * 1000 )),\"reason\":\"deploy\"}" >/dev/null 2>&1 \
     && echo "   drain window armed: ${DRAIN_WINDOW}s (pid=$pid)" \
-    || echo "   drain window NOT armed (server needs auth, or already gone) — continuing"
+    || echo "   drain window NOT armed (no credentials, or already gone) — continuing"
 }
 
 # SIGTERM, then wait out the window, then SIGKILL as a backstop.
