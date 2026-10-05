@@ -42,15 +42,53 @@ fi
 echo "==> deploy-web :$PORT ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
 
 # --- 1. Stop whatever currently serves :4447 ---------------------------------
+# s100: this used to be `kill` + `sleep 2` + `kill -9`, which is a hard kill: whatever the agent was
+# doing simply stopped, and the transcript kept a half-written assistant message. Now the server is
+# told a drain window is coming (POST /global/lifecycle), so connected browsers can count down, refuse
+# new prompts and hold what the reader was trying to send. The server exits when the window elapses
+# (see the SIGTERM handler in cli/cmd/web.ts). SIGKILL is only a backstop for a server that ignores it.
 STOPPED=0
+DRAIN_WINDOW="${DRAIN_WINDOW:-60}"
+DRAIN_BACKSTOP="${DRAIN_BACKSTOP:-30}"
+
+# Arm the window first. The server may require auth (FE-001 login gate); a 401 still means it is
+# alive and it will arm nothing, so this is best-effort and never fails the deploy.
+arm_window() {
+  local pid="$1"
+  if [ -z "$pid" ]; then return 0; fi
+  local port="${2:-$PORT}"
+  curl -sf -m 5 -X POST "http://127.0.0.1:$port/global/lifecycle" \
+    -H "content-type: application/json" \
+    -d "{\"timeoutMs\":$(( DRAIN_WINDOW * 1000 )),\"reason\":\"deploy\"}" >/dev/null 2>&1 \
+    && echo "   drain window armed: ${DRAIN_WINDOW}s (pid=$pid)" \
+    || echo "   drain window NOT armed (server needs auth, or already gone) — continuing"
+}
+
+# SIGTERM, then wait out the window, then SIGKILL as a backstop.
+stop_pid() {
+  local pid="$1" why="$2"
+  if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then return 1; fi
+  arm_window "$pid"
+  echo "   SIGTERM to old server pid=$pid ($why)"
+  kill "$pid" 2>/dev/null || true
+  local waited=0
+  while [ "$waited" -lt "$(( DRAIN_WINDOW + DRAIN_BACKSTOP ))" ]; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "   old server exited on its own after ${waited}s"
+      return 0
+    fi
+    sleep 1
+    waited=$(( waited + 1 ))
+  done
+  echo "   still alive after ${waited}s — force-killing (it ignored the drain)"
+  kill -9 "$pid" 2>/dev/null || true
+  return 0
+}
+
 if [ -f "$PIDFILE" ]; then
   OLD_PID="$(cat "$PIDFILE" 2>/dev/null || true)"
   if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
-    echo "   killing old server pid=$OLD_PID (from pidfile)"
-    kill "$OLD_PID" 2>/dev/null || true
-    sleep 2
-    if kill -0 "$OLD_PID" 2>/dev/null; then echo "   still alive, force-killing"; kill -9 "$OLD_PID" 2>/dev/null || true; fi
-    STOPPED=1
+    stop_pid "$OLD_PID" "from pidfile" && STOPPED=1
   fi
   rm -f "$PIDFILE"
 fi
@@ -58,11 +96,7 @@ fi
 # Fallback: find port listener via ss if the pidfile was missing/stale.
 LISTENER_PID="$(ss -ltnp 2>/dev/null | awk -v p=":$PORT$" '$4 ~ p {x=$6; sub(/.*pid=/,"",x); sub(/,.*/,"",x); print x}' | tr -d '\n')"
 if [ -n "$LISTENER_PID" ] && kill -0 "$LISTENER_PID" 2>/dev/null; then
-  echo "   killing port-$PORT listener pid=$LISTENER_PID"
-  kill "$LISTENER_PID" 2>/dev/null || true
-  sleep 2
-  if kill -0 "$LISTENER_PID" 2>/dev/null; then echo "   still alive, force-killing"; kill -9 "$LISTENER_PID" 2>/dev/null || true; fi
-  STOPPED=1
+  stop_pid "$LISTENER_PID" "port-$PORT listener" && STOPPED=1
 fi
 
 if [ "$STOPPED" -eq 1 ]; then echo "   old instance stopped"; else echo "   nothing was serving :$PORT"; fi
