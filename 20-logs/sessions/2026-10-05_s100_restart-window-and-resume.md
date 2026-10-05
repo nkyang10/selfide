@@ -77,3 +77,37 @@ still exits immediately. `test/server` **339 pass / 2 fail** — the same two pr
 **Known limits, deliberate:** a standalone `SessionPrompt.shell` is not counted (deadline covers it);
 the busy-path live check (turn in flight → drain waits) still rides on S3's live check because it
 needs a real provider turn; the counter is per-process, which is exactly the unit a drain owns.
+
+## S2 — DONE, committed `218a2a6`, pushed
+
+- **`context/restart-state.ts`** (pure, unit-tested): the phase machine. A failed poll is
+  `reconnecting` (a daemon that died without draining must not look idle); **404 is `idle`** (an old
+  server can never announce a window — holding forever would make the feature worse than nothing); a
+  500 is an outage, not an old server. `deadlineFrom` stamps the client's clock with the reported
+  duration, so a skewed phone counts the right seconds.
+- **`context/restart.tsx`**: polls the **active connection's** `/global/lifecycle` every 5 s (Basic
+  auth when the stored connection has a password; same-origin cookies otherwise), stamps
+  `deadlineLocal = Date.now() + remainingMs`, and ticks the countdown locally every 250 ms —
+  **no server round-trips after the stamp**.
+- **`components/restart-banner.tsx`**: bottom-center pill (ProviderTip's corner — collides with
+  nothing), countdown during `draining`, `app.server.retrying` during `reconnecting`;
+  `pointer-events-none` wrapper so it shields nothing.
+- **`prompt-input/submit.ts`**: the shared submit factory blocks during `blocking()` — the text
+  **stays in the editor** (never captured away), a toast says so, and an `owedSubmit` flag re-fires
+  `handleSubmit` when the phase returns to idle. An editor emptied while held is a cancelled prompt.
+  One hook covers every composer (session + drafts) since all go through `createPromptSubmit`.
+- **i18n**: `restart.window.countdown` / `restart.held.title` / `restart.held.description` added to
+  en + all 62 locale files (real zh/zht translations; English placeholders elsewhere — the FU-116/131/138
+  debt class). Parity test green.
+- **Mount**: `RestartProvider` + `RestartBanner` in `SharedProviders` — inside `ServerProvider`, so
+  `useServer().current` resolves, and shared by both layouts.
+
+**Gates:** typecheck clean · restart-state 7/7 · parity green · `test:unit` **851 pass / 8 fail — all
+8 in `submit.test.ts`, which fails identically on a stashed tree**: a pre-existing
+`Export named 'use' not found in solid-js/web server build` breakage that `--only-failures` had been
+masking (the flag skips previously-passing files, so nobody re-ran this one). My restart mock in that
+test is correct for when it gets fixed; the underlying import-chain breakage is **FU-144**.
+
+**Not yet live-verified in a browser** (FU-133): the countdown has never been watched. First chance:
+the next deploy — the deploy script arms the window over HTTP, so the banner should appear on every
+connected client before the kill.

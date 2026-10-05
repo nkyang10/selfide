@@ -517,3 +517,6 @@
 | 2026-10-05 07:50 | s100 | server | serve.ts drain + ActiveTurns counter hooked at SessionPrompt.loop + early-exit drain tick + activeTurns in the endpoint | 0 | **first live run: activeTurns stripped from the response** — added to Info but not to the Schema.Struct; fixed |
 | 2026-10-05 07:55 | s100 | live | idle server + 60s window + SIGTERM → "drain complete" t+2s; response carries activeTurns | 0 | test/server 339/2 (same two pre-existing) |
 | 2026-10-05 07:56 | s100 | fork | commit `8dcc25c` + push | 0 | both review gaps closed |
+| 2026-10-05 08:20 | s100 | app | S2: restart-state.ts (phase machine, 404=idle, 500=outage) + restart.tsx (5s poll, local countdown) + restart-banner.tsx + submit hold/resubmit + i18n sweep (en+62, zh/zht real) | 0 | committed 218a2a6 |
+| 2026-10-05 08:25 | s100 | test | restart-state 7/7; parity green; test:unit 851/8 — **all 8 pre-existing** (submit.test.ts broken at HEAD: `use` missing from solid-js/web server build; --only-failures was masking it) | 0 | FU-144 filed |
+| 2026-10-05 08:26 | s100 | fork | push 218a2a6 | 0 | S2 in; countdown invisible until deployed |
