@@ -200,3 +200,28 @@ cannot double-consume the editor. Checked rather than assumed.
 **Gates after the fixes:** typecheck 30/30 · rows-current **12/12** (one new never-started case, one
 corrected expectation) · restart-state 7/7 · parity green · `test/server` 338/2 — the same two
 pre-existing failures.
+
+## Self-review verdict (user: "do u agree the fixes just now?")
+
+Honest answer recorded: **fix 2 agreed unreservedly; fix 1 agreed in direction but I had
+under-weighted two things, now corrected (`da48bae`)**:
+
+1. **The multi-device flash.** Phone + desktop on one session (the s097 pattern): a just-submitted
+   prompt is assistant-less on the *other* device for the beat between its write and the first status
+   event — the marker would offer Resume on a turn that is about to start. Fix: the never-started
+   shape now requires **staleness** (`> 30 s`, `Timeline.neverStartedStaleMs`); an honest gap cannot
+   be that old, and a crash's aftermath always is. The incomplete-assistant shape keeps **no**
+   threshold — the row's existence proves the turn ran and died. Accepted cost: a tab left quiet
+   never re-derives, so its marker waits for the next sync event. The stamp is the server's clock, so
+   the threshold absorbs skew.
+2. **The continuation text was wrong for the never-started shape.** "your previous turn was cut off"
+   — there *was* no turn. Now: "the previous turn was cut off **or the last prompt was never
+   processed** … complete the last user request" (the model still sees the original prompt above it).
+
+**And the review of the review caught its own bug:** my first cut-off condition used `||` with a
+non-null-asserted `lastAssistant` on both sides — `assistantMessages.length === 0` crashed on the
+right side. TypeScript could not catch it (the assertion silenced it); only the new test did.
+Restructured to a ternary.
+
+**Gates:** typecheck 30/30 · rows-current **13/13** (new: a one-second-old never-started turn is not
+marked) · `test/server` 338/2 same-as-baseline.

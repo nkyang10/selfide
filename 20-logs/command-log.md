@@ -526,3 +526,4 @@
 | 2026-10-05 09:19 | s100 | fork | push d3f9645 | 0 | S1+S2+S3 all in; deploy pending (user's call) |
 | 2026-10-05 09:45 | s100 | review | full code review of S1+S2+S3 | 0 | **1 real hole fixed**: a prompt admitted but whose assistant row never got written (crash in the gap) was silently swallowed — now marked + resumable, on both sides; **2nd fix**: orDie on a declared 404 path → notFound; **2 recorded limits**: non-atomic busy check + per-process status (FU-145); **1 verified-safe suspicion**: double capture() |
 | 2026-10-05 09:50 | s100 | fork | commit `fb4d94e` + push | 0 | rows-current 12/12 (one expectation corrected — it had pinned the bug) |
+| 2026-10-05 10:00 | s100 | fix | staleness gate (30s) on the never-started marker + RESUME_PROMPT wording for both shapes | 0 | **first version had an || short-circuit crash the new test caught** (non-null assertion silenced TS); restructured to ternary; commit da48bae |
