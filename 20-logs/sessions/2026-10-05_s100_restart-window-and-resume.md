@@ -150,3 +150,53 @@ while busy/retry, marks nothing completed, marks only the last turn) · parity g
 **Not live-verified yet (FU-133):** the happy path needs a real provider turn. The natural check:
 the next deploy interrupts this very session's turn — the marker + Resume should appear on it, and
 clicking it should continue the work. That is the validation plan.
+
+## Code review of the whole feature (user: "do a code review")
+
+Read every file again with fresh eyes. **Four findings; one of them is the most valuable thing this
+session produced**, and it came from re-reading the *server's* message-creation order rather than my
+own code.
+
+### 1. FIXED — a prompt whose assistant never started was silently swallowed (`fb4d94e`)
+
+`prompt.ts:1217` writes the assistant message **before** the model call (and
+`finalizeInterruptedAssistant` finalizes it on interrupt), so a stop during a slow completion leaves
+the "incomplete assistant" shape my derivation read. But the gap **before** that row — persisting the
+user message, then compaction / system prompt / history — is a second shape: a transcript ending in a
+user message with **no assistant at all**. Nothing marked it, and the endpoint answered
+`nothing-to-resume`, so the prompt just sat there forever.
+
+Both sides now read it: the endpoint treats "newest message overall is a user message with no
+assistant after it" as resumable (borrowing agent + model from the **user** message, which carries
+both), and the row derivation marks it. Verified `noReply` — the only other way to get a user message
+with no assistant — **has no callers**, so the shape has exactly one meaning.
+
+**A test that encoded the old behaviour had to be corrected, which is the point of the review:** the
+existing "shows the progress row for a submitted turn the server has not acknowledged" asserted
+`rows("idle") === ["UserMessage"]` for a user-only turn — i.e. it *pinned* the swallowed prompt as
+correct. It now expects the divider, with the reason in the test.
+
+### 2. FIXED — `Effect.orDie` on a documented error path
+
+`MessageV2.page` fails with `NotFoundError` when the session row is gone; `orDie` turned that into a
+**defect**, i.e. a 500 crash instead of the endpoint's declared 404. Now mapped to the existing
+`notFound(...)` helper.
+
+### 3. RECORDED, not fixed — the busy check is not atomic, and status is per-process
+
+The endpoint reads in-memory `SessionStatus` and then admits the continuation. Between the two, a
+second tab can submit a real prompt, and the continuation then **steers** into that turn (the user
+sees two prompts, one of them the synthetic "the server restarted" text). Also inherited from the
+fork's process-local design: if the desktop sidecar and the web server both run, a session busy in
+the *other* process reads `idle` here. Both are bounded (steer, not a second turn; the marker still
+clears) and the honest fix is a DB lease — FU-145, deliberately not built in this session.
+
+### 4. VERIFIED SAFE — the double `capture()` in the resubmit path
+
+The resubmit effect checks emptiness with `prompt.capture()` and then `handleSubmit` captures again.
+`capture: () => value` (`context/prompt-state.ts:235`) is a pure snapshot accessor, so calling it twice
+cannot double-consume the editor. Checked rather than assumed.
+
+**Gates after the fixes:** typecheck 30/30 · rows-current **12/12** (one new never-started case, one
+corrected expectation) · restart-state 7/7 · parity green · `test/server` 338/2 — the same two
+pre-existing failures.
