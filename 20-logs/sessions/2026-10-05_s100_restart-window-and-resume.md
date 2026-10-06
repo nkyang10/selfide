@@ -239,3 +239,28 @@ window instead of two seconds.
 **Live validation, same moment:** this session's own turn is being cut off by this deploy. After the
 restart, reloading this session should show the **cut-off marker + Resume button** on it — the
 end-to-end proof of S3 that no test could give.
+
+## Deploy result + the bug the deploy's own demo exposed (`fda7b9f`)
+
+- **Deployed `1.1.20261006020037`, pid 4025119.** The endpoint answers on the real server:
+  `{"draining":false,…,"activeTurns":2}` — the counter is live in production, not only in tests. And
+  the deploy **was** the S3 validation: the turn it killed came back as my own `RESUME_PROMPT`
+  ("the previous turn was cut off or the last prompt was never processed…"), which can only exist if
+  the new binary admitted a continuation into a durable transcript that survived the kill.
+- Because the running binary was the old one, this deploy was still a hard kill — expected and
+  reported by the script ("drain window NOT armed — continuing").
+- **Then I armed a window by hand to demo the countdown — and my own demo exposed a real bug.** An
+  **elapsed** window kept reporting `draining: true`, so ~15 s later every connected client would
+  have **held input forever**: once a deadline exists there is no other path back to
+  `draining: false`, because the stop behind a demo (or an aborted deploy) never comes.
+  Fixed (`fda7b9f`): an elapsed window reports `draining: false`. The reasoning I got wrong the first
+  time was that "never unblock" was the safer lie — it is not, because **answering the poll at all
+  proves the process is up**; a stop that is genuinely coming shows up as the *next poll failing*,
+  which moves the client to `reconnecting` and holds again.
+  Three test expectations changed with it, each stating the new contract, including
+  `arm(0)` → `draining: false` (which is also why the signal handler re-arms the default rather than
+  trusting a zero window).
+
+**Gates:** lifecycle 9/9 · `test/server` 343/2 — the same two pre-existing failures.
+**FU-133 again, third time:** unit tests were green, the endpoint was correct, and the feature was
+still broken — only exercising the live system found it.
