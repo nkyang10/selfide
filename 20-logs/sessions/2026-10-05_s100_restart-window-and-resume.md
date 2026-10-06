@@ -225,3 +225,17 @@ Restructured to a ternary.
 
 **Gates:** typecheck 30/30 · rows-current **13/13** (new: a one-second-old never-started turn is not
 marked) · `test/server` 338/2 same-as-baseline.
+
+## Deploy (all of S1+S2+S3 in one binary)
+
+Pre-state: build `1.1.20261005052148`, pid **3188312** — an **old** binary, so this deploy is still a
+hard kill (no drain handler, and `POST /global/lifecycle` on it answers 404, which the deploy script
+reports as "NOT armed — continuing"). Everything below is what ships *with* this build.
+
+Expected behaviour for the reader on the **next** deploy (the first that has the window at all):
+the banner counts down, the composer refuses sends and holds them, and the turn is given the full
+window instead of two seconds.
+
+**Live validation, same moment:** this session's own turn is being cut off by this deploy. After the
+restart, reloading this session should show the **cut-off marker + Resume button** on it — the
+end-to-end proof of S3 that no test could give.
